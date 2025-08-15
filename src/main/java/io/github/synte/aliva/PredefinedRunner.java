@@ -12,7 +12,6 @@ import io.github.synte.aliva.parser.ScraperDSLParser;
 import io.github.synte.aliva.runtime.DSLInterpreter;
 
 public class PredefinedRunner {
-
     public static void main(String[] args) throws Exception {
         String scriptsFolder = "scripts";
 

@@ -54,6 +54,11 @@ public class BrowserFunctions {
             }
             return null;
         });
+
+        // New function to get current URL
+        registry.register("browserCurrentUrl", (args, vars) -> {
+            return getBrowser(args[0]).getCurrentUrl();
+        });
     }
 
     private BrowserEngine getBrowser(Object ref) {

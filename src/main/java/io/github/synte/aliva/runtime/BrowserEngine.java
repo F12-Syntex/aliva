@@ -5,6 +5,7 @@ public interface BrowserEngine {
     void click(String selector);
     void type(String selector, String text);
     void waitForSelector(String selector, int timeoutMillis);
+    String getCurrentUrl();
     String getContent();
     void close();
 }

@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.List;
 
 public class StringFunctions {
+
     public static void register(FunctionRegistry registry) {
         registry.register("replace", (args, vars) -> String.valueOf(args[0])
                 .replace(String.valueOf(args[1]), String.valueOf(args[2])));
@@ -14,7 +15,9 @@ public class StringFunctions {
                 castToStringList(args[0])));
         registry.register("concat", (args, vars) -> {
             StringBuilder sb = new StringBuilder();
-            for (Object a : args) sb.append(a != null ? a.toString() : "null");
+            for (Object a : args) {
+                sb.append(a != null ? a.toString() : "null");
+            }
             return sb.toString();
         });
         registry.register("lower", (args, vars) -> String.valueOf(args[0]).toLowerCase());
@@ -24,6 +27,28 @@ public class StringFunctions {
                 .matches(String.valueOf(args[1])));
         registry.register("sanitizeFilename", (args, vars) -> String.valueOf(args[0])
                 .replaceAll("[^a-zA-Z0-9-_]", "_").trim());
+        registry.register("replaceAll", (args, vars) -> {
+            if (args.length < 3) {
+                throw new RuntimeException("replaceAll(text, target, replacement) requires 3 arguments");
+            }
+            String text = args[0] != null ? args[0].toString() : "";
+            String target = args[1] != null ? args[1].toString() : "";
+            String replacement = args[2] != null ? args[2].toString() : "";
+            return text.replace(target, replacement);
+        });
+        registry.register("urlSlug", (args, vars) -> {
+            String url = String.valueOf(args[0]);
+            if (url.endsWith("/")) {
+                url = url.substring(0, url.length() - 1);
+            }
+            String[] parts = url.split("/");
+            String last = parts[parts.length - 1];
+            int qIdx = last.indexOf('?');
+            if (qIdx >= 0) {
+                last = last.substring(0, qIdx);
+            }
+            return last.trim();
+        });
     }
 
     private static List<String> castToStringList(Object obj) {

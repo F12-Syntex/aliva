@@ -1,30 +1,172 @@
+// === Config ===
+rootDir = "H:/Novels/Downloader/mangas"
+mangaUrl = "https://mangadex.org/title/8f9f282b-c0a8-4890-9098-3e080b3c36da/namaiki-na-gal-ane-wo-wakaraseru-hanashi"
+
+// === Get slug from URL ===
+urlParts = split(mangaUrl, "/")
+mangaSlug = get(urlParts, length(urlParts) - 1)
+if (contains(mangaSlug, "?")) {
+    mangaSlug = split(mangaSlug, "?")[0]
+}
+safeTitle = mangaSlug
+
+// === Paths ===
+mangaDir = rootDir + "/" + safeTitle
+chapterDir = mangaDir + "/chapters"
+metaFile = mangaDir + "/metadata.json"
+
+// Ensure dirs
+writeFile(mangaDir + "/.init", "")
+writeFile(chapterDir + "/.init", "")
+
+// === Resume or fresh ===
+startUrl = mangaUrl + "?tab=chapters&page=1"
+map meta = { "title": safeTitle, "url": mangaUrl, "chapters": [] }
+
+fileContent = readFile(metaFile)
+if (fileContent != null) {
+    meta = jsonToMap(fileContent)
+    chaptersList = meta["chapters"]
+    if (length(chaptersList) > 0) {
+        lastIndex = length(chaptersList) - 1
+        lastChapter = get(chaptersList, lastIndex)
+        lastPageUrl = lastChapter["page_url"]
+        if (lastPageUrl != null && lastPageUrl != "") {
+            if (!contains(lastPageUrl, "?tab=chapters")) {
+                pageNumFromMeta = lastChapter["page_found"]
+                lastPageUrl = mangaUrl + "?tab=chapters&page=" + pageNumFromMeta
+            }
+            startUrl = lastPageUrl
+        }
+    }
+}
+
+// === STEP 1: scrape chapter list ===
 map b = browserLaunch("playwright", true)
-browserGoto(b, "https://mangadex.org/title/67a7dfd1-a39d-46c8-8ff2-9a24a9abaeb6")
+browserGoto(b, startUrl)
+waitForHydration(b, ".chapter", 30000)
 
-// Wait for Nuxt hydration and the first chapter link
-waitForHydration(b, "a[href*='/chapter/']", 15000)
+pageNum = 1
+done = 0
+while (done == 0) {
+    waitForHydration(b, ".chapter", 30000)
+    page = browserContent(b)
+    currentPageUrl = mangaUrl + "?tab=chapters&page=" + pageNum
 
-// Scroll a few times to load lazy chapters
-number s = 0
-while (s < 5) {
-    browserScroll(b, 1000)
-    sleep(500)
-    s = s + 1
+    chapters = selectAll(page, ".chapter")
+    j = 0
+    while (j < length(chapters)) {
+        chap = get(chapters, j)
+        title = selectText(chap, ".line-clamp-1")
+        url   = selectAttr(chap, "a[href*='/chapter/']", "href")
+        lang  = selectAttr(chap, "img[title]", "title")
+        if (lang == null) { lang = "" }
+
+        exists = 0
+        k = 0
+        while (k < length(meta["chapters"])) {
+            existing = get(meta["chapters"], k)
+            if (existing["url"] == "https://mangadex.org" + url) {
+                exists = 1
+            }
+            k = k + 1
+        }
+
+        if (exists == 0) {
+            append(meta["chapters"], {
+                "title": title,
+                "language": lang,
+                "url": "https://mangadex.org" + url,
+                "page_found": pageNum,
+                "page_url": currentPageUrl
+            })
+        }
+        j = j + 1
+    }
+
+    nextButtons = selectAllAttr(page, "button:has(svg.feather-arrow-right)", "class")
+    if (length(nextButtons) == 0) {
+        done = 1
+    } else {
+        btnClass = get(nextButtons, 0)
+        if (contains(btnClass, "disabled")) {
+            done = 1
+        } else {
+            browserClick(b, "button:has(svg.feather-arrow-right)")
+            sleep(1500)
+            pageNum = pageNum + 1
+        }
+    }
+
+    writeFile(metaFile, toJson(meta))
 }
-
-// Get hydrated page
-map page = browserContent(b)
-
-// Extract chapter titles and URLs
-list titles = selectAllText(page, "a[href*='/chapter/']")
-list urls   = selectAllAttr(page, "a[href*='/chapter/']", "href")
-
-// Print them
-number len = length(titles)
-number i = 0
-while (i < len) {
-    println(get(titles, i) + " => " + get(urls, i))
-    i = i + 1
-}
-
 browserClose(b)
+
+// === STEP 2: get first chapter info ===
+if (length(meta["chapters"]) > 0) {
+    firstChapter = get(meta["chapters"], 0)
+    firstChapterUrl = firstChapter["url"]
+
+    map b2 = browserLaunch("playwright", true)
+    browserGoto(b2, firstChapterUrl)
+    waitForHydration(b2, "body", 30000)
+    sleep(5000)
+    chapPage = browserContent(b2)
+    browserClose(b2)
+
+    // filenames from DOM
+    list filenames = selectAllAttr(chapPage, "div.md--page img", "alt")
+
+    // === STEP 3: At-Home API ===
+    chapParts = split(firstChapterUrl, "/")
+    chapterId = get(chapParts, length(chapParts) - 1)
+
+    apiUrl = "https://api.mangadex.org/at-home/server/" + chapterId
+    map headers = { "Accept": "application/json" }
+    apiJsonText = fetchText(apiUrl, headers)
+    map apiJson = jsonToMap(apiJsonText)
+
+    baseUrl = apiJson["baseUrl"]
+    map chapterInfo = apiJson["chapter"]
+    hashVal = chapterInfo["hash"]
+    list dataList = chapterInfo["data"]
+
+    // === STEP 4: download images ===
+    i = 0
+    htmlImages = ""
+    while (i < length(dataList)) {
+        filename = get(dataList, i)
+        imgUrl = baseUrl + "/data/" + hashVal + "/" + filename
+        imgBytes = fetchBytes(imgUrl)
+        filePath = chapterDir + "/img_" + i + ".jpg"
+        writeBytes(filePath, imgBytes)
+
+        // Add to HTML
+        htmlImages = htmlImages + "<div style='text-align:center;'><img src='img_" + i + ".jpg' alt='Page " + (i+1) + "'/></div>"
+        i = i + 1
+    }
+
+    // === STEP 5: Create EPUB ===
+    epubCreate("book")
+    epubMetadata(book, safeTitle, "Unknown Author", "en")
+
+    // (Optional) set cover to first page
+    firstImgBytes = fetchBytes(baseUrl + "/data/" + hashVal + "/" + get(dataList, 0))
+    epubSetCover(book, firstImgBytes, "cover.jpg")
+
+    // Cover & info page
+    infoHtml = "<html xmlns='http://www.w3.org/1999/xhtml'><head><title>" + safeTitle + "</title></head><body>"
+    infoHtml = infoHtml + "<h1 style='text-align:center;'>" + safeTitle + "</h1>"
+    infoHtml = infoHtml + "<p>MangaDex URL: <a href='" + mangaUrl + "'>" + mangaUrl + "</a></p>"
+    infoHtml = infoHtml + "</body></html>"
+    epubAddChapter(book, "Cover & Info", infoHtml)
+
+    // Add chapter with images
+    chapHtml = "<html xmlns='http://www.w3.org/1999/xhtml'><head><title>" + firstChapter["title"] + "</title></head><body>"
+    chapHtml = chapHtml + htmlImages + "</body></html>"
+    epubAddChapter(book, firstChapter["title"], chapHtml)
+
+    // Save EPUB
+    epubPath = mangaDir + "/" + safeTitle + ".epub"
+    epubSave(book, epubPath)
+}

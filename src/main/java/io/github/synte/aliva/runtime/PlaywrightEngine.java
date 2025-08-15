@@ -54,14 +54,28 @@ public class PlaywrightEngine implements BrowserEngine {
     @Override
     public void close() {
         try {
-            if (page != null) page.close();
-        } catch (Exception ignored) {}
+            if (page != null) {
+                page.close();
+            }
+        } catch (Exception ignored) {
+        }
         try {
-            if (browser != null) browser.close();
-        } catch (Exception ignored) {}
+            if (browser != null) {
+                browser.close();
+            }
+        } catch (Exception ignored) {
+        }
         try {
-            if (playwright != null) playwright.close();
-        } catch (Exception ignored) {}
+            if (playwright != null) {
+                playwright.close();
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    @Override
+    public String getCurrentUrl() {
+        return page.url();
     }
 
     // Extra helper for scrolling
