@@ -1,0 +1,110 @@
+// === Config ===
+novelUrl = "https://novelbin.me/novel-book/peak-reversal"
+baseDir = "H:/Novels/Downloader"
+
+// === Step 1: Fetch main page ===
+page = fetch(novelUrl)
+
+// === Step 2: Extract novel metadata ===
+title = selectText(page, "h3.title[itemprop=name]")
+author = selectAttr(page, "meta[itemprop=name]", "content")
+genresStr = join(selectAllText(page, "ul.info.info-meta li:contains(Genre:) a"), ", ")
+status = selectText(page, "ul.info.info-meta li:contains(Status:) a")
+rating = selectText(page, "span[itemprop=ratingValue]")
+reviews = selectText(page, "span[itemprop=reviewCount]")
+cover = selectAttr(page, "meta[itemprop=image]", "content")
+
+// === Step 3: Prepare output dirs ===
+safeTitle = sanitizeFilename(title)
+novelDir = baseDir + "/" + safeTitle
+chaptersDir = novelDir + "/chapters"
+metaFile = novelDir + "/metadata.json"
+
+// === Step 4: Extract all chapter titles + links ===
+chapTexts = selectAllText(page, ".list-chapter a .nchr-text")
+chapLinks = selectAllAttr(page, ".list-chapter a", "href")
+
+// === Step 5: Build list of maps with numeric sorting ===
+chapList = []
+for (i in range(0, length(chapTexts) - 1)) {
+    txt = chapTexts[i]
+    url = chapLinks[i]
+
+    parts = split(txt, " ")
+    rawNum = replace(parts[1], ":", "")
+    if (rawNum == "") {
+        num = 0
+    } else {
+        num = toNumber(rawNum)
+    }
+
+    append(chapList, {
+        "num": num,
+        "title": txt,
+        "url": url
+    })
+}
+
+// Sort ascending by "num"
+chapList = sortBy(chapList, "num")
+
+// === Step 6: Prepare meta object ===
+meta = {
+    "title": title,
+    "author": author,
+    "genres": split(genresStr, ", "),
+    "status": status,
+    "rating": rating,
+    "reviews": reviews,
+    "cover": cover,
+    "chapters": []
+}
+
+// === Step 7: Resume if metadata exists ===
+startIndex = 0
+if (readFile(metaFile) != null) {
+    println("Resuming from existing metadata.json...")
+    existing = parseJson(readFile(metaFile))
+    meta = existing
+
+    maxNum = 0
+    for (entry in meta["chapters"]) {
+        if (entry["number"] > maxNum) {
+            maxNum = entry["number"]
+        }
+    }
+    startIndex = maxNum
+    println("Already have " + maxNum + " chapters, resuming from chapter " + (maxNum + 1))
+} else {
+    println("No metadata found, starting fresh...")
+}
+
+// === Step 8: Download remaining chapters ===
+total = length(chapList)
+for (i in range(startIndex, total - 1)) {
+    chapEntry = chapList[i] // extract map entry first
+    chapNum = chapEntry["num"]
+    chapTitle = chapEntry["title"]
+    chapUrl = chapEntry["url"]
+
+    println("[" + chapNum + "/" + total + "] Downloading: " + chapTitle)
+
+    chapDoc = fetch(chapUrl)
+    paragraphs = selectAllText(chapDoc, "#chr-content p")
+    fullText = join(paragraphs, "\n")
+
+    filePath = chaptersDir + "/chapter" + chapNum + ".txt"
+    writeFile(filePath, fullText)
+
+    append(meta["chapters"], {
+        "number": chapNum,
+        "title": chapTitle,
+        "url": chapUrl,
+        "file": filePath
+    })
+
+    // Save metadata after each chapter
+    writeFile(metaFile, toJson(meta))
+}
+
+println("Download complete. Total chapters: " + length(meta["chapters"]))

@@ -8,7 +8,8 @@ import org.junit.jupiter.api.Timeout;
 
 public class ListAndStringTests {
 
-    @Test @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
     void testJoinAndSplit() {
         String code = """
                 list items = ["a", "b", "c"]
@@ -19,7 +20,8 @@ public class ListAndStringTests {
         assertEquals("3", TestUtils.runScript(code));
     }
 
-    @Test @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
     void testReplaceAndTrim() {
         String code = """
                 string text = "  Hello World  "
@@ -29,7 +31,8 @@ public class ListAndStringTests {
         assertEquals("Hello DSL", TestUtils.runScript(code));
     }
 
-    @Test @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
     void testConcat() {
         String code = """
                 print(concat("Hello", " ", "DSL"))
@@ -37,7 +40,8 @@ public class ListAndStringTests {
         assertEquals("Hello DSL", TestUtils.runScript(code));
     }
 
-    @Test @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
     void testAppendAndGet() {
         String code = """
                 list arr = ["a"]
@@ -47,11 +51,21 @@ public class ListAndStringTests {
         assertEquals("b", TestUtils.runScript(code));
     }
 
-    @Test @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
     void testContains() {
         String code = """
                 print(contains("Hello DSL", "DSL"))
                 """;
         assertEquals("true", TestUtils.runScript(code));
+    }
+
+    @Test
+    void testRangeAndSlice() {
+        String code = """
+        list nums = range(1, 5)
+        print(length(nums), get(nums, 0), get(nums, 4))
+        """;
+        assertEquals("5 1 5", TestUtils.runScript(code));
     }
 }
