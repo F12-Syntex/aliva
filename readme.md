@@ -1,26 +1,34 @@
-```markdown
 # Aliva Language
 
-**Aliva** is a domain‑specific scripting language for building robust and maintainable web scraping workflows.  
-It combines a simple, readable syntax with a focused standard library of scraping and text‑processing functions.
+**Aliva** is a lightweight domain‑specific scripting language for building reliable, maintainable web scraping workflows.  
+It offers a clean, readable syntax and a standard library tailored specifically for extracting and processing structured data from the web.
 
-The core language is intentionally minimal — it provides only the tools necessary to fetch, parse, and process web content.  
-Additional functionality, such as EPUB generation or AI‑assisted processing, will be delivered as optional extensions.
+The language focuses on the core scraping pipeline:
+1. **Fetching** content
+2. **Parsing** HTML
+3. **Selecting** elements or attributes
+4. **Transforming** and **saving** results
+
+Advanced features such as EPUB generation or AI‑assisted processing are intentionally excluded from the core and will be delivered as optional extensions.
 
 ---
 
-## Features
+## Key Features
 
-- **Scraping‑oriented standard library**  
-  Built‑in functions for HTTP fetching, HTML parsing, CSS selection, and attribute/text extraction.
-- **Text processing utilities**  
-  Includes pattern replacement, substring extraction, joining/splitting, and blank‑value handling.
-- **Control flow**  
-  Variables, loops, and conditionals for building dynamic scraping logic.
-- **Filesystem support**  
-  Create directories, read and write files, and track progress across sessions.
-- **Extensible architecture**  
-  Designed for integration with external modules without modifying the core interpreter.
+- **Scraping‑focused standard library**  
+  Fetch pages, parse HTML, and query DOM elements with expressive CSS selectors.
+
+- **Built‑in text manipulation**  
+  Replace patterns, extract substrings, join lists, handle missing values, and more.
+
+- **Straightforward control flow**  
+  Variables, loops, and conditionals for building complex scraping logic without ceremony.
+
+- **File system integration**  
+  Create directories, read/write files, and persist progress for resumable scraping.
+
+- **Extensible by design**  
+  New capabilities can be added as modules without altering the core interpreter.
 
 ---
 
@@ -49,14 +57,14 @@ for title in titles {
 aliva/
  ├── src/
  │   ├── main/
- │   │   ├── antlr4/         # ANTLR grammar (.g4)
+ │   │   ├── antlr4/             # ANTLR grammar definition (.g4)
  │   │   ├── java/
  │   │   │   └── io/github/synte/aliva/
- │   │   │       ├── parser/ # Generated parser & lexer
- │   │   │       ├── runtime/# Interpreter & core modules
+ │   │   │       ├── parser/     # Generated parser & lexer
+ │   │   │       ├── runtime/    # Interpreter & core modules
  │   │   │       └── Main.java
- │   └── test/               # Unit tests
- ├── scripts/                # Example .aliva scripts
+ │   └── test/                   # Unit tests
+ ├── scripts/                    # Example .aliva scripts
  ├── pom.xml
  └── README.md
 ```
@@ -65,9 +73,9 @@ aliva/
 
 ## Getting Started
 
-### Requirements
-- Java 21 or later
-- Maven 3.9 or later
+### Prerequisites
+- **Java** 21 or later  
+- **Maven** 3.9+  
 
 ### Build
 ```bash
@@ -83,23 +91,16 @@ java -cp target/aliva-1.0-SNAPSHOT.jar io.github.synte.aliva.Main scripts/test.a
 
 ## Extending Aliva
 
-Aliva supports external modules for extending functionality.  
-Modules can provide new functions, integrate third‑party libraries, or connect to external services.
+Aliva is designed to be modular.  
+Extensions can provide new built‑in functions or integrate with third‑party services and APIs.
 
-Example extensions:
-- EPUB generation
-- AI‑assisted content classification
-- API integrations
+Potential extensions include:
+- EPUB creation for scraped content
+- AI‑powered text classification or summarization
+- Data export to formats like CSV, JSON, or databases
 
 ---
 
 ## License
 
-Distributed under the MIT License. See `LICENSE` for details.
-```
-
----
-
-If you want, I can now draft a **cleaned‑up `test.aliva` example** that mirrors your previous `test.dsl` but removes the EPUB logic so it works as a core‑language‑only demo.  
-
-Do you want me to prepare that next?
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
