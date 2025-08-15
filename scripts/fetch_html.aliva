@@ -1,0 +1,3 @@
+string url = "https://example.com"
+doc page = fetch(url)
+print(html(page))
