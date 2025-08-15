@@ -1,0 +1,30 @@
+map b = browserLaunch("playwright", true)
+browserGoto(b, "https://mangadex.org/title/67a7dfd1-a39d-46c8-8ff2-9a24a9abaeb6")
+
+// Wait for Nuxt hydration and the first chapter link
+waitForHydration(b, "a[href*='/chapter/']", 15000)
+
+// Scroll a few times to load lazy chapters
+number s = 0
+while (s < 5) {
+    browserScroll(b, 1000)
+    sleep(500)
+    s = s + 1
+}
+
+// Get hydrated page
+map page = browserContent(b)
+
+// Extract chapter titles and URLs
+list titles = selectAllText(page, "a[href*='/chapter/']")
+list urls   = selectAllAttr(page, "a[href*='/chapter/']", "href")
+
+// Print them
+number len = length(titles)
+number i = 0
+while (i < len) {
+    println(get(titles, i) + " => " + get(urls, i))
+    i = i + 1
+}
+
+browserClose(b)
