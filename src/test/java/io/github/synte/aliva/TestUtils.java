@@ -18,7 +18,6 @@ public class TestUtils {
 
         DSLInterpreter interpreter = new DSLInterpreter();
 
-        // Capture console output
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         PrintStream originalOut = System.out;
         System.setOut(new PrintStream(outputStream));

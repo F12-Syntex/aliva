@@ -7,47 +7,123 @@ script
 statement
     : varDecl
     | assignment
-    | funcCall
+    | ifStatement
+    | whileStatement
+    | forStatement
+    | funcCall ';'?
     ;
 
 varDecl
-    : type ID (EQUAL expression)?
+    : (STRING_TYPE | NUMBER_TYPE | BOOLEAN_TYPE | LIST_TYPE | MAP_TYPE) ID ('=' expression)? ';'?
     ;
 
 assignment
-    : ID EQUAL expression
+    : ID '=' expression ';'?
+    | ID '[' expression ']' '=' expression ';'?
     ;
 
-type
-    : STRING_TYPE
-    | DOC_TYPE
+ifStatement
+    : 'if' '(' expression ')' block ('else' block)?
+    ;
+
+whileStatement
+    : 'while' '(' expression ')' block
+    ;
+
+forStatement
+    : 'for' '(' ID 'in' expression ')' block
+    ;
+
+block
+    : '{' statement* '}'
     ;
 
 expression
-    : literal
-    | funcCall
-    | variableRef
+    : logicalOrExpr
     ;
 
-variableRef
-    : ID
+logicalOrExpr
+    : logicalAndExpr ('||' logicalAndExpr)*
+    ;
+
+logicalAndExpr
+    : equalityExpr ('&&' equalityExpr)*
+    ;
+
+equalityExpr
+    : comparisonExpr (op=('==' | '!=') comparisonExpr)*
+    ;
+
+comparisonExpr
+    : additiveExpr (op=('<' | '<=' | '>' | '>=') additiveExpr)*
+    ;
+
+additiveExpr
+    : multiplicativeExpr (op=('+' | '-') multiplicativeExpr)*
+    ;
+
+multiplicativeExpr
+    : unaryExpr (op=('*' | '/' | '%') unaryExpr)*
+    ;
+
+unaryExpr
+    : op=('!' | '-') unaryExpr
+    | primary
+    ;
+
+primary
+    : literal
+    | listLiteral
+    | mapLiteral
+    | variableRef
+    | funcCall
+    | '(' expression ')'
     ;
 
 literal
     : STRING
+    | NUMBER
+    | BOOLEAN
+    | NULL
+    ;
+
+listLiteral
+    : '[' (expression (',' expression)*)? ']'
+    ;
+
+mapLiteral
+    : '{' (mapEntry (',' mapEntry)*)? '}'
+    ;
+
+mapEntry
+    : STRING ':' expression
+    ;
+
+variableRef
+    : ID
+    | ID '[' expression ']'
     ;
 
 funcCall
-    : ID LPAREN (expression (COMMA expression)*)? RPAREN
+    : ID '(' (expression (',' expression)*)? ')'
     ;
 
-STRING_TYPE  : 'string';
-DOC_TYPE     : 'doc';
+// Types
+STRING_TYPE : 'string';
+NUMBER_TYPE : 'number';
+BOOLEAN_TYPE : 'boolean';
+LIST_TYPE   : 'list';
+MAP_TYPE    : 'map';
 
-STRING       : '"' ( ~["\\] | '\\' . )* '"' ;
-ID           : [a-zA-Z_][a-zA-Z0-9_]* ;
-EQUAL        : '=';
-COMMA        : ',';
-LPAREN       : '(';
-RPAREN       : ')';
-WS           : [ \t\r\n]+ -> skip;
+// Literals
+BOOLEAN : 'true' | 'false';
+NULL    : 'null';
+NUMBER  : '-'? [0-9]+ ('.' [0-9]+)?;
+STRING  : '"' (~["\\] | '\\' .)* '"' | '\'' (~['\\] | '\\' .)* '\'';
+
+// Identifiers
+ID : [a-zA-Z_][a-zA-Z0-9_]*;
+
+// Whitespace & Comments
+WS : [ \t\r\n]+ -> skip;
+COMMENT : '//' ~[\r\n]* -> skip;

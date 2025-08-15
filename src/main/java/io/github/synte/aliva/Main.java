@@ -18,8 +18,8 @@ public class Main {
         }
 
         String code = Files.readString(Path.of(args[0]));
-        ScraperDSLLexer lexer = new ScraperDSLLexer(CharStreams.fromString(code));
-        ScraperDSLParser parser = new ScraperDSLParser(new CommonTokenStream(lexer));
+        var lexer = new ScraperDSLLexer(CharStreams.fromString(code));
+        var parser = new ScraperDSLParser(new CommonTokenStream(lexer));
 
         var tree = parser.script();
         DSLInterpreter interpreter = new DSLInterpreter();

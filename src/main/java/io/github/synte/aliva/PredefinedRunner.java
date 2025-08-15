@@ -14,10 +14,12 @@ import io.github.synte.aliva.runtime.DSLInterpreter;
 public class PredefinedRunner {
 
     public static void main(String[] args) throws Exception {
-        List<String> scripts = List.of(
-                "scripts/print.aliva",
-                "scripts/fetch_html.aliva"
-        );
+        String scriptsFolder = "scripts";
+
+        List<String> scripts = Files.list(Path.of(scriptsFolder))
+                .filter(path -> path.toString().endsWith(".aliva"))
+                .map(Path::toString)
+                .toList();
 
         for (String scriptPath : scripts) {
             System.out.println("=== Running: " + scriptPath + " ===");
@@ -28,8 +30,8 @@ public class PredefinedRunner {
 
     private static void runScript(String scriptFile) throws Exception {
         String code = Files.readString(Path.of(scriptFile));
-        ScraperDSLLexer lexer = new ScraperDSLLexer(CharStreams.fromString(code));
-        ScraperDSLParser parser = new ScraperDSLParser(new CommonTokenStream(lexer));
+        var lexer = new ScraperDSLLexer(CharStreams.fromString(code));
+        var parser = new ScraperDSLParser(new CommonTokenStream(lexer));
 
         var tree = parser.script();
         DSLInterpreter interpreter = new DSLInterpreter();
