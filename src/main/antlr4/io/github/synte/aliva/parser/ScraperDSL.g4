@@ -81,8 +81,13 @@ primary
     | mapLiteral
     | variableRef
     | funcCall
+    | functionLiteral
     | '(' expression ')'
     | primary '[' expression ']'
+    ;
+
+functionLiteral
+    : 'fun' '(' ')' block
     ;
 
 literal

@@ -25,6 +25,7 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
         EpubFunctions.register(functions);
         new BrowserFunctions().register(functions);
         MiscFunctions.register(functions);
+        ThreadFunctions.register(functions);
     }
 
     @Override
@@ -306,10 +307,37 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
         if (ctx.funcCall() != null) {
             return visitFuncCall(ctx.funcCall());
         }
+        if (ctx.functionLiteral() != null) {
+            return visitFunctionLiteral(ctx.functionLiteral());
+        }
         if (ctx.expression() != null) {
             return visit(ctx.expression()); // parentheses
+        }
+        return null;
+    }
 
-                }return null;
+    public Object visitFunctionLiteral(ScraperDSLParser.FunctionLiteralContext ctx) {
+        // Return a Runnable capturing the block's code for deferred execution
+        return new DSLRunnable(ctx.block());
+    }
+
+    public class DSLRunnable implements Runnable {
+        private final ScraperDSLParser.BlockContext blockCtx;
+
+        public DSLRunnable(ScraperDSLParser.BlockContext blockCtx) {
+            this.blockCtx = blockCtx;
+        }
+
+        @Override
+        public void run() {
+            try {
+                visit(blockCtx);
+            } catch (BreakException | ContinueException e) {
+                // ignore break/continue in this context
+            } catch (Exception e) {
+                throw new RuntimeException("Error executing DSLRunnable: " + e.getMessage(), e);
+            }
+        }
     }
 
     @Override

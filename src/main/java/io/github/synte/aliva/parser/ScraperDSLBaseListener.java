@@ -221,6 +221,18 @@ public class ScraperDSLBaseListener implements ScraperDSLListener {
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
+	@Override public void enterFunctionLiteral(ScraperDSLParser.FunctionLiteralContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitFunctionLiteral(ScraperDSLParser.FunctionLiteralContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
 	@Override public void enterLiteral(ScraperDSLParser.LiteralContext ctx) { }
 	/**
 	 * {@inheritDoc}

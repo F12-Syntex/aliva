@@ -113,6 +113,12 @@ public interface ScraperDSLVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitPrimary(ScraperDSLParser.PrimaryContext ctx);
 	/**
+	 * Visit a parse tree produced by {@link ScraperDSLParser#functionLiteral}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitFunctionLiteral(ScraperDSLParser.FunctionLiteralContext ctx);
+	/**
 	 * Visit a parse tree produced by {@link ScraperDSLParser#literal}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
