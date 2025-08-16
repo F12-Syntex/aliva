@@ -1,7 +1,7 @@
 grammar ScraperDSL;
 
 script
-    : statement* EOF
+    : (ARGUMENTS '(' (ID (',' ID)*)? ')')? statement* EOF
     ;
 
 statement
@@ -133,6 +133,7 @@ STRING  : '"' (~["\\] | '\\' .)* '"' | '\'' (~['\\] | '\\' .)* '\'';
 
 // Identifiers
 ID : [a-zA-Z_][a-zA-Z0-9_]*;
+ARGUMENTS : 'arguments';
 
 // Whitespace & Comments
 WS : [ \t\r\n]+ -> skip;

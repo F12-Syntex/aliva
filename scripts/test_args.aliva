@@ -1,0 +1,14 @@
+// Test script to demonstrate argument passing
+println("Number of arguments: " + length(arguments))
+
+i = 0
+while (i < length(arguments)) {
+    println("Argument " + i + ": " + get(arguments, i))
+    i = i + 1
+}
+
+// Example usage of arguments
+if (length(arguments) >= 1) {
+    firstArg = get(arguments, 0)
+    println("First argument is: " + firstArg)
+}

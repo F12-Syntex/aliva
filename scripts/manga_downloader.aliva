@@ -1,6 +1,11 @@
 // === CONFIG ===
 rootDir = "H:/Novels/Downloader/mangas"
-mangaUrl = "https://mangadex.org/title/8b37d5d0-86a9-41ae-894a-daa2fda69dbf/shushi-shouce"
+// Read manga URL from first argument, or use default
+if (length(arguments) >= 1) {
+    mangaUrl = get(arguments, 0)
+} else {
+    mangaUrl = "https://mangadex.org/title/8b37d5d0-86a9-41ae-894a-daa2fda69dbf/shushi-shouce"
+}
 
 // === SLUG EXTRACTION ===
 urlParts = split(mangaUrl, "/")

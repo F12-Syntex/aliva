@@ -13,6 +13,7 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
 
     private final Map<String, Object> variables = new HashMap<>();
     private final FunctionRegistry functions = new FunctionRegistry();
+    private String[] scriptArgs = new String[0];
 
     public DSLInterpreter() {
         CoreFunctions.register(functions);
@@ -25,6 +26,16 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
         EpubFunctions.register(functions);
         new BrowserFunctions().register(functions);
         MiscFunctions.register(functions);
+    }
+
+    public void setScriptArgs(String[] args) {
+        this.scriptArgs = args;
+        // Add the arguments to the interpreter's variables
+        List<String> argsList = new ArrayList<>();
+        for (String arg : args) {
+            argsList.add(arg);
+        }
+        variables.put("arguments", argsList);
     }
 
     @Override

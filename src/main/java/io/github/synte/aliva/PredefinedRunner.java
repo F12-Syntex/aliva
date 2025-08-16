@@ -2,7 +2,6 @@ package io.github.synte.aliva;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
@@ -13,27 +12,25 @@ import io.github.synte.aliva.runtime.DSLInterpreter;
 
 public class PredefinedRunner {
     public static void main(String[] args) throws Exception {
-        String scriptsFolder = "scripts";
-
-        List<String> scripts = Files.list(Path.of(scriptsFolder))
-                .filter(path -> path.toString().endsWith(".aliva"))
-                .map(Path::toString)
-                .toList();
-
-        for (String scriptPath : scripts) {
-            System.out.println("=== Running: " + scriptPath + " ===");
-            runScript(scriptPath);
-            System.out.println();
-        }
+        // Hardcoded path to a script file
+        String scriptPath = "scripts/manga_downloader.aliva";
+        
+        // Hardcoded manga URL as argument
+        String[] scriptArgs = {"https://mangadex.org/title/5836cf0e-bf53-4bba-9f18-dcada2fd5bed/kirei-na-kimi-ni-korosaretai"};
+        
+        System.out.println("=== Running: " + scriptPath + " with arguments: " + String.join(", ", scriptArgs) + " ===");
+        runScript(scriptPath, scriptArgs);
+        System.out.println();
     }
 
-    private static void runScript(String scriptFile) throws Exception {
+    private static void runScript(String scriptFile, String[] scriptArgs) throws Exception {
         String code = Files.readString(Path.of(scriptFile));
         var lexer = new ScraperDSLLexer(CharStreams.fromString(code));
         var parser = new ScraperDSLParser(new CommonTokenStream(lexer));
 
         var tree = parser.script();
         DSLInterpreter interpreter = new DSLInterpreter();
+        interpreter.setScriptArgs(scriptArgs);
         interpreter.visit(tree);
     }
 }

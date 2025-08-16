@@ -2,6 +2,7 @@ package io.github.synte.aliva;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
@@ -13,16 +14,21 @@ import io.github.synte.aliva.runtime.DSLInterpreter;
 public class Main {
     public static void main(String[] args) throws Exception {
         if (args.length == 0) {
-            System.err.println("Usage: java -jar aliva.jar <script-file>");
+            System.err.println("Usage: java -jar aliva.jar <script-file> [script-arguments...]");
             System.exit(1);
         }
 
-        String code = Files.readString(Path.of(args[0]));
+        // First argument is the script file, the rest are script arguments
+        String scriptFile = args[0];
+        String[] scriptArgs = Arrays.copyOfRange(args, 1, args.length);
+
+        String code = Files.readString(Path.of(scriptFile));
         var lexer = new ScraperDSLLexer(CharStreams.fromString(code));
         var parser = new ScraperDSLParser(new CommonTokenStream(lexer));
 
         var tree = parser.script();
         DSLInterpreter interpreter = new DSLInterpreter();
+        interpreter.setScriptArgs(scriptArgs);
         interpreter.visit(tree);
     }
 }
