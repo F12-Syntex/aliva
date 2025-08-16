@@ -25,7 +25,6 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
         EpubFunctions.register(functions);
         new BrowserFunctions().register(functions);
         MiscFunctions.register(functions);
-        ThreadFunctions.register(functions);
     }
 
     @Override

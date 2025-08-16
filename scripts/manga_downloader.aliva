@@ -1,6 +1,6 @@
 // === CONFIG ===
 rootDir = "H:/Novels/Downloader/mangas"
-mangaUrl = "https://mangadex.org/title/6079d103-113b-45b4-a76b-8750842b0770/bokura-no-ai-wa-kimochi-warui"
+mangaUrl = "https://mangadex.org/title/8f9f282b-c0a8-4890-9098-3e080b3c36da/namaiki-na-gal-ane-wo-wakaraseru-hanashi"
 
 // === SLUG EXTRACTION ===
 urlParts = split(mangaUrl, "/")
@@ -55,17 +55,30 @@ if (length(chapters) == 0) {
                 set(meta, "chapters", chList)
             }
 
+            nums = getNumbers(title)
+            chapNum = 0
+            if (isList(nums) && length(nums) > 0) {
+                chapNum = toNumber(get(nums, 0))
+            } else {
+                chapNum = j + 1
+            }
+
             chapMap = {
                 "title": title,
                 "language": lang,
+                "chapter_number": chapNum,
                 "url": fullUrl,
                 "page_found": startPageNum,
                 "page_url": currentPageUrl,
                 "pages": []
             }
 
-            safeChapTitle = replaceAll(title, "[\\\\/:*?\"<>|]", "_")
-            chapterFolder = chapterDir + "/temp_" + j + "-" + safeChapTitle + "/images"
+            chapNumStr = chapNum + ""
+            if (length(chapNumStr) < 2) {
+                chapNumStr = "0" + chapNumStr
+            }
+            safeChapTitle = replaceAll(title, "[\\/:*?\"<>|]", "_")
+            chapterFolder = chapterDir + "/" + chapNumStr + "-" + safeChapTitle + "/images"
             writeFile(chapterFolder + "/.init", "")
             set(chapMap, "folder", chapterFolder)
 
@@ -91,34 +104,18 @@ if (length(chapters) == 0) {
 
             println("Downloading " + length(dataList) + " images for chapter: " + title)
 
-            // Create a list to store our download tasks
-            downloadTasks = []
-            pagesList = []
-            
             imgIndex = 0
+            pagesList = []
             while (imgIndex < length(dataList)) {
                 filename = get(dataList, imgIndex)
                 imgUrl = baseUrl + "/data/" + hashVal + "/" + filename
+                imgBytes = fetchBytes(imgUrl)
                 filePath = chapterFolder + "/image_" + imgIndex + ".jpg"
+                writeBytes(filePath, imgBytes)
                 append(pagesList, filePath)
-                
-                // Create a task for each image download
-                // Define a function for the download task
-                taskFn = fun() {
-                    imgBytes = fetchBytes(imgUrl)
-                    writeBytes(filePath, imgBytes)
-                    println("Downloaded: " + filename)
-                }
-                append(downloadTasks, taskFn)
                 imgIndex = imgIndex + 1
             }
 
-            // Submit all download tasks to thread pool
-            futures = threadBatchSubmit(downloadTasks)
-            
-            // Wait for all downloads to complete
-            threadWaitForAll(futures)
-            
             set(chapMap, "pages", pagesList)
             append(chList, chapMap)
             set(meta, "chapters", chList)
@@ -134,49 +131,6 @@ if (length(chapters) == 0) {
 browserClose(b)
 
 println("Download complete.")
-
-// === RENUMBER CHAPTERS ===
-println("Renumbering chapters in reverse order...")
-chList = get(meta, "chapters")
-totalChapters = length(chList)
-
-// Reverse order processing
-i = totalChapters - 1
-while (i >= 0) {
-    chapMap = get(chList, i)
-    chapNum = totalChapters - i  // newest chapter gets highest number
-    
-    // Update chapter number in metadata
-    set(chapMap, "chapter_number", chapNum)
-    
-    // Rename folder
-    oldFolder = get(chapMap, "folder")
-    chapNumStr = chapNum + ""
-    if (length(chapNumStr) < 2) {
-        chapNumStr = "0" + chapNumStr
-    }
-    safeChapTitle = replaceAll(get(chapMap, "title"), "[\\\\/:*?\"<>|]", "_")
-    newFolder = chapterDir + "/" + chapNumStr + "-" + safeChapTitle + "/images"
-    
-    // Create new folder and move files
-    writeFile(newFolder + "/.init", "")
-    oldFiles = get(chapMap, "pages")
-    newPages = []
-    for (oldFile in oldFiles) {
-        fileName = split(oldFile, "/")[-1]
-        newFile = newFolder + "/" + fileName
-        writeBytes(newFile, readBytes(oldFile))
-        append(newPages, newFile)
-    }
-    set(chapMap, "folder", newFolder)
-    set(chapMap, "pages", newPages)
-    
-    i = i - 1
-}
-
-// Update metadata file with new chapter numbers
-writeFile(metaFile, toJson(meta))
-println("Chapter renumbering complete.")
 
 // === CREATE EPUB ===
 println("Creating EPUB...")
