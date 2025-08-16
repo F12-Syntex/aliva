@@ -6,8 +6,10 @@ C:\Users\synte\Programming\aliva\src\main\java\io\github\synte\aliva\parser\Scra
 C:\Users\synte\Programming\aliva\src\main\java\io\github\synte\aliva\parser\ScraperDSLParser.java
 C:\Users\synte\Programming\aliva\src\main\java\io\github\synte\aliva\parser\ScraperDSLVisitor.java
 C:\Users\synte\Programming\aliva\src\main\java\io\github\synte\aliva\PredefinedRunner.java
+C:\Users\synte\Programming\aliva\src\main\java\io\github\synte\aliva\runtime\BreakException.java
 C:\Users\synte\Programming\aliva\src\main\java\io\github\synte\aliva\runtime\BrowserEngine.java
 C:\Users\synte\Programming\aliva\src\main\java\io\github\synte\aliva\runtime\BrowserFunctions.java
+C:\Users\synte\Programming\aliva\src\main\java\io\github\synte\aliva\runtime\ContinueException.java
 C:\Users\synte\Programming\aliva\src\main\java\io\github\synte\aliva\runtime\CoreFunctions.java
 C:\Users\synte\Programming\aliva\src\main\java\io\github\synte\aliva\runtime\DSLFunction.java
 C:\Users\synte\Programming\aliva\src\main\java\io\github\synte\aliva\runtime\DSLInterpreter.java
@@ -21,9 +23,3 @@ C:\Users\synte\Programming\aliva\src\main\java\io\github\synte\aliva\runtime\Lis
 C:\Users\synte\Programming\aliva\src\main\java\io\github\synte\aliva\runtime\MiscFunctions.java
 C:\Users\synte\Programming\aliva\src\main\java\io\github\synte\aliva\runtime\PlaywrightEngine.java
 C:\Users\synte\Programming\aliva\src\main\java\io\github\synte\aliva\runtime\StringFunctions.java
-C:\Users\synte\Programming\aliva\target\generated-sources\antlr4\io\github\synte\aliva\parser\ScraperDSLBaseListener.java
-C:\Users\synte\Programming\aliva\target\generated-sources\antlr4\io\github\synte\aliva\parser\ScraperDSLBaseVisitor.java
-C:\Users\synte\Programming\aliva\target\generated-sources\antlr4\io\github\synte\aliva\parser\ScraperDSLLexer.java
-C:\Users\synte\Programming\aliva\target\generated-sources\antlr4\io\github\synte\aliva\parser\ScraperDSLListener.java
-C:\Users\synte\Programming\aliva\target\generated-sources\antlr4\io\github\synte\aliva\parser\ScraperDSLParser.java
-C:\Users\synte\Programming\aliva\target\generated-sources\antlr4\io\github\synte\aliva\parser\ScraperDSLVisitor.java

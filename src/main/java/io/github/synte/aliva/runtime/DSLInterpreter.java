@@ -28,6 +28,20 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
     }
 
     @Override
+    public Object visitStatement(ScraperDSLParser.StatementContext ctx) {
+        if (ctx.getChildCount() > 0) {
+            String first = ctx.getChild(0).getText();
+            if ("break".equals(first)) {
+                throw new BreakException();
+            }
+            if ("continue".equals(first)) {
+                throw new ContinueException();
+            }
+        }
+        return super.visitStatement(ctx);
+    }
+
+    @Override
     public Object visitVarDecl(ScraperDSLParser.VarDeclContext ctx) {
         String type = ctx.getChild(0).getText();
         String name = ctx.ID().getText();
@@ -36,12 +50,18 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
             value = visit(ctx.expression());
         } else {
             value = switch (type) {
-                case "string" -> "";
-                case "number" -> 0.0;
-                case "boolean" -> false;
-                case "list" -> new ArrayList<>();
-                case "map" -> new LinkedHashMap<>();
-                default -> null;
+                case "string" ->
+                    "";
+                case "number" ->
+                    0.0;
+                case "boolean" ->
+                    false;
+                case "list" ->
+                    new ArrayList<>();
+                case "map" ->
+                    new LinkedHashMap<>();
+                default ->
+                    null;
             };
         }
         variables.put(name, value);
@@ -98,8 +118,16 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
     public Object visitWhileStatement(ScraperDSLParser.WhileStatementContext ctx) {
         int safety = 10000;
         while (toBoolean(visit(ctx.expression()))) {
-            visit(ctx.block());
-            if (--safety <= 0) throw new RuntimeException("Infinite loop detected");
+            try {
+                visit(ctx.block());
+            } catch (BreakException be) {
+                break;
+            } catch (ContinueException ce) {
+                continue;
+            }
+            if (--safety <= 0) {
+                throw new RuntimeException("Infinite loop detected");
+            }
         }
         return null;
     }
@@ -111,7 +139,13 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
         if (iterable instanceof List<?> list) {
             for (Object item : list) {
                 variables.put(varName, item);
-                visit(ctx.block());
+                try {
+                    visit(ctx.block());
+                } catch (BreakException be) {
+                    break;
+                } catch (ContinueException ce) {
+                    continue;
+                }
             }
         } else {
             throw new RuntimeException("For loop can only iterate over lists");
@@ -126,9 +160,12 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
             String op = ctx.getChild(i * 2 - 1).getText();
             Object right = visit(ctx.comparisonExpr(i));
             left = switch (op) {
-                case "==" -> compareEquals(left, right);
-                case "!=" -> !compareEquals(left, right);
-                default -> throw new RuntimeException("Unknown equality op: " + op);
+                case "==" ->
+                    compareEquals(left, right);
+                case "!=" ->
+                    !compareEquals(left, right);
+                default ->
+                    throw new RuntimeException("Unknown equality op: " + op);
             };
         }
         return left;
@@ -143,11 +180,16 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
             double l = toNumber(left);
             double r = toNumber(right);
             left = switch (op) {
-                case "<" -> l < r;
-                case "<=" -> l <= r;
-                case ">" -> l > r;
-                case ">=" -> l >= r;
-                default -> throw new RuntimeException("Unknown comparison op: " + op);
+                case "<" ->
+                    l < r;
+                case "<=" ->
+                    l <= r;
+                case ">" ->
+                    l > r;
+                case ">=" ->
+                    l >= r;
+                default ->
+                    throw new RuntimeException("Unknown comparison op: " + op);
             };
         }
         return left;
@@ -161,11 +203,13 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
             Object right = visit(ctx.multiplicativeExpr(i));
             left = switch (op) {
                 case "+" ->
-                        (left instanceof String || right instanceof String)
-                                ? String.valueOf(left) + String.valueOf(right)
-                                : toNumber(left) + toNumber(right);
-                case "-" -> toNumber(left) - toNumber(right);
-                default -> throw new RuntimeException("Unknown additive op: " + op);
+                    (left instanceof String || right instanceof String)
+                    ? String.valueOf(left) + String.valueOf(right)
+                    : toNumber(left) + toNumber(right);
+                case "-" ->
+                    toNumber(left) - toNumber(right);
+                default ->
+                    throw new RuntimeException("Unknown additive op: " + op);
             };
         }
         return left;
@@ -180,10 +224,14 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
             double l = toNumber(left);
             double r = toNumber(right);
             left = switch (op) {
-                case "*" -> l * r;
-                case "/" -> l / r;
-                case "%" -> l % r;
-                default -> throw new RuntimeException("Unknown multiplicative op: " + op);
+                case "*" ->
+                    l * r;
+                case "/" ->
+                    l / r;
+                case "%" ->
+                    l % r;
+                default ->
+                    throw new RuntimeException("Unknown multiplicative op: " + op);
             };
         }
         return left;
@@ -195,9 +243,12 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
             String opText = ctx.op.getText();
             Object val = visit(ctx.unaryExpr());
             return switch (opText) {
-                case "-" -> -toNumber(val);
-                case "!" -> !toBoolean(val);
-                default -> throw new RuntimeException("Unknown unary op: " + opText);
+                case "-" ->
+                    -toNumber(val);
+                case "!" ->
+                    !toBoolean(val);
+                default ->
+                    throw new RuntimeException("Unknown unary op: " + opText);
             };
         }
         return super.visitUnaryExpr(ctx);
@@ -240,13 +291,25 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
 
     @Override
     public Object visitPrimary(ScraperDSLParser.PrimaryContext ctx) {
-        if (ctx.literal() != null) return visitLiteral(ctx.literal());
-        if (ctx.listLiteral() != null) return visitListLiteral(ctx.listLiteral());
-        if (ctx.mapLiteral() != null) return visitMapLiteral(ctx.mapLiteral());
-        if (ctx.variableRef() != null) return visitVariableRef(ctx.variableRef());
-        if (ctx.funcCall() != null) return visitFuncCall(ctx.funcCall());
-        if (ctx.expression() != null) return visit(ctx.expression()); // parentheses
-        return null;
+        if (ctx.literal() != null) {
+            return visitLiteral(ctx.literal());
+        }
+        if (ctx.listLiteral() != null) {
+            return visitListLiteral(ctx.listLiteral());
+        }
+        if (ctx.mapLiteral() != null) {
+            return visitMapLiteral(ctx.mapLiteral());
+        }
+        if (ctx.variableRef() != null) {
+            return visitVariableRef(ctx.variableRef());
+        }
+        if (ctx.funcCall() != null) {
+            return visitFuncCall(ctx.funcCall());
+        }
+        if (ctx.expression() != null) {
+            return visit(ctx.expression()); // parentheses
+
+                }return null;
     }
 
     @Override
@@ -257,16 +320,23 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
     }
 
     private boolean compareEquals(Object left, Object right) {
-        if (left == null && right == null) return true;
-        if (left == null || right == null) return false;
+        if (left == null && right == null) {
+            return true;
+        }
+        if (left == null || right == null) {
+            return false;
+        }
         if (left instanceof Number && right instanceof Number) {
             return Double.compare(((Number) left).doubleValue(), ((Number) right).doubleValue()) == 0;
         }
-        return left.toString().equals(right.toString());
+        // Normalize to string for comparison (important for DSL map field lookups)
+        return String.valueOf(left).equals(String.valueOf(right));
     }
 
     private double toNumber(Object val) {
-        if (val instanceof Number n) return n.doubleValue();
+        if (val instanceof Number n) {
+            return n.doubleValue();
+        }
         try {
             return Double.parseDouble(val.toString());
         } catch (Exception e) {
@@ -275,14 +345,18 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
     }
 
     private boolean toBoolean(Object value) {
-        if (value instanceof Boolean b) return b;
-        if (value instanceof Number n) return n.doubleValue() != 0;
+        if (value instanceof Boolean b) {
+            return b;
+        }
+        if (value instanceof Number n) {
+            return n.doubleValue() != 0;
+        }
         return value != null;
     }
 
     private String stripQuotes(String s) {
-        if (s != null && s.length() >= 2 &&
-                ((s.startsWith("\"") && s.endsWith("\"")) || (s.startsWith("'") && s.endsWith("'")))) {
+        if (s != null && s.length() >= 2
+                && ((s.startsWith("\"") && s.endsWith("\"")) || (s.startsWith("'") && s.endsWith("'")))) {
             return s.substring(1, s.length() - 1);
         }
         return s;

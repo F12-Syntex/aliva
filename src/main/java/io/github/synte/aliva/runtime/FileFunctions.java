@@ -36,10 +36,10 @@ public class FileFunctions {
                 Path p = Path.of(args[0].toString());
                 Files.createDirectories(p.getParent());
                 Files.writeString(
-                    p,
-                    args[1].toString(),
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.APPEND
+                        p,
+                        args[1].toString(),
+                        StandardOpenOption.CREATE,
+                        StandardOpenOption.APPEND
                 );
             } catch (IOException e) {
                 throw new RuntimeException(e);
@@ -68,6 +68,16 @@ public class FileFunctions {
                 throw new RuntimeException("Failed to write bytes to file: " + args[0], e);
             }
             return null;
+        });
+
+        // Read binary file into byte[]
+        registry.register("readBytes", (args, vars) -> {
+            try {
+                Path p = Path.of(args[0].toString());
+                return Files.readAllBytes(p);
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to read bytes from file: " + args[0], e);
+            }
         });
     }
 }

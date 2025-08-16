@@ -10,6 +10,8 @@ statement
     | ifStatement
     | whileStatement
     | forStatement
+    | 'break' ';'?
+    | 'continue' ';'?
     | funcCall ';'?
     ;
 
@@ -38,8 +40,9 @@ block
     : '{' statement* '}'
     ;
 
+// Expression with ternary support
 expression
-    : logicalOrExpr
+    : logicalOrExpr ('?' expression ':' expression)?
     ;
 
 logicalOrExpr
@@ -71,6 +74,7 @@ unaryExpr
     | primary
     ;
 
+// Primary now supports post-indexing on any primary result
 primary
     : literal
     | listLiteral
@@ -78,6 +82,7 @@ primary
     | variableRef
     | funcCall
     | '(' expression ')'
+    | primary '[' expression ']'
     ;
 
 literal

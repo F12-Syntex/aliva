@@ -1,7 +1,10 @@
 package io.github.synte.aliva.runtime;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class StringFunctions {
 
@@ -48,6 +51,15 @@ public class StringFunctions {
                 last = last.substring(0, qIdx);
             }
             return last.trim();
+        });
+        registry.register("getNumbers", (args, vars) -> {
+            String input = String.valueOf(args[0]);
+            java.util.List<String> numbers = new ArrayList<>();
+            Matcher m = Pattern.compile("\\d+").matcher(input);
+            while (m.find()) {
+                numbers.add(m.group());
+            }
+            return numbers;
         });
     }
 

@@ -11,9 +11,6 @@ import nl.siegmann.epublib.domain.Metadata;
 import nl.siegmann.epublib.domain.Resource;
 import nl.siegmann.epublib.epub.EpubWriter;
 
-/**
- * DSL functions for creating EPUB books using epublib.
- */
 public class EpubFunctions {
 
     public static void register(FunctionRegistry registry) {
@@ -41,14 +38,16 @@ public class EpubFunctions {
             Book book = (Book) args[0];
             String title = args[1].toString();
             String htmlContent = args[2].toString();
-            String fileName = args.length > 3 ? args[3].toString() : title.replaceAll("\\s+", "_") + ".xhtml";
+            String fileName = args.length > 3 ? args[3].toString()
+                    : title.replaceAll("\\s+", "_") + ".xhtml";
 
             try {
                 Resource res = new Resource(
                         new ByteArrayInputStream(htmlContent.getBytes(StandardCharsets.UTF_8)),
                         fileName
                 );
-                return book.addSection(title, res);
+                book.addSection(title, res);
+                return null;
             } catch (IOException e) {
                 throw new RuntimeException("Failed to add chapter: " + title, e);
             }
@@ -58,7 +57,8 @@ public class EpubFunctions {
             Book book = (Book) args[0];
             String title = args[1].toString();
             String text = args[2].toString();
-            String fileName = args.length > 3 ? args[3].toString() : title.replaceAll("\\s+", "_") + ".xhtml";
+            String fileName = args.length > 3 ? args[3].toString()
+                    : title.replaceAll("\\s+", "_") + ".xhtml";
 
             String htmlWrapped = "<html xmlns=\"http://www.w3.org/1999/xhtml\"><head><title>"
                     + title + "</title></head><body><h1>" + title + "</h1><p>"
@@ -69,7 +69,8 @@ public class EpubFunctions {
                         new ByteArrayInputStream(htmlWrapped.getBytes(StandardCharsets.UTF_8)),
                         fileName
                 );
-                return book.addSection(title, res);
+                book.addSection(title, res);
+                return null;
             } catch (IOException e) {
                 throw new RuntimeException("Failed to add text chapter: " + title, e);
             }
@@ -99,6 +100,21 @@ public class EpubFunctions {
                 throw new RuntimeException("Failed to save EPUB to " + path, e);
             }
             return null;
+        });
+
+        // Improved: Add an image resource to EPUB and return the image name for HTML use
+        registry.register("epubAddImage", (args, vars) -> {
+            Book book = (Book) args[0];
+            String imgName = args[1].toString();
+            byte[] imgBytes = (byte[]) args[2];
+
+            try {
+                Resource imgRes = new Resource(new ByteArrayInputStream(imgBytes), imgName);
+                book.getResources().add(imgRes);
+                return imgName;
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to add image: " + imgName, e);
+            }
         });
     }
 }
