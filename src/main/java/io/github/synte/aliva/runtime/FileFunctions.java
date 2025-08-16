@@ -79,5 +79,15 @@ public class FileFunctions {
                 throw new RuntimeException("Failed to read bytes from file: " + args[0], e);
             }
         });
+
+        // Check if a file exists
+        registry.register("fileExists", (args, vars) -> {
+            try {
+                Path p = Path.of(args[0].toString());
+                return Files.exists(p);
+            } catch (Exception e) {
+                return false;
+            }
+        });
     }
 }

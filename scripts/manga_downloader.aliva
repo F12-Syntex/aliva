@@ -1,6 +1,6 @@
 // === CONFIG ===
 rootDir = "H:/Novels/Downloader/mangas"
-mangaUrl = "https://mangadex.org/title/8f9f282b-c0a8-4890-9098-3e080b3c36da/namaiki-na-gal-ane-wo-wakaraseru-hanashi"
+mangaUrl = "https://mangadex.org/title/8b37d5d0-86a9-41ae-894a-daa2fda69dbf/shushi-shouce"
 
 // === SLUG EXTRACTION ===
 urlParts = split(mangaUrl, "/")
@@ -20,6 +20,22 @@ writeFile(chapterDir + "/.init", "")
 
 // === META INIT ===
 map meta = { "title": safeTitle, "url": mangaUrl, "chapters": [] }
+
+// Load existing metadata if it exists
+if (fileExists(metaFile)) {
+    existingContent = readFile(metaFile)
+    if (length(existingContent) > 0) {
+        existingMeta = jsonToMap(existingContent)
+        if (existingMeta != null) {
+            meta = existingMeta
+        }
+    }
+}
+
+// Ensure chapters array exists
+if (get(meta, "chapters") == null) {
+    set(meta, "chapters", [])
+}
 
 // === SCRAPE ONE PAGE ===
 println("Launching browser...")
@@ -47,6 +63,37 @@ if (length(chapters) == 0) {
 
         if (lang == "English") {
             fullUrl = "https://mangadex.org" + url
+
+            // check for already downloaded chapter via URL and page count
+            existingChapters = get(meta, "chapters")
+            isDownloaded = false
+            
+            for (ex in existingChapters) {
+                if (ex != null && get(ex, "url") == fullUrl) {
+                    pages = get(ex, "pages")
+                    if (pages != null && length(pages) > 0) {
+                        // Verify files actually exist
+                        allFilesExist = true
+                        for (page in pages) {
+                            if (page == null || !fileExists(page)) {
+                                allFilesExist = false
+                                break
+                            }
+                        }
+                        if (allFilesExist) {
+                            isDownloaded = true
+                            break
+                        }
+                    }
+                }
+            }
+
+            if (isDownloaded) {
+                println("Skipping already downloaded chapter: " + title)
+                j = j + 1
+                continue
+            }
+
             println("Processing chapter: " + title)
 
             chList = get(meta, "chapters")
@@ -77,13 +124,12 @@ if (length(chapters) == 0) {
             if (length(chapNumStr) < 2) {
                 chapNumStr = "0" + chapNumStr
             }
-            safeChapTitle = replaceAll(title, "[\\/:*?\"<>|]", "_")
-            chapterFolder = chapterDir + "/" + chapNumStr + "-" + safeChapTitle + "/images"
-            writeFile(chapterFolder + "/.init", "")
+            safeChapTitle = replaceAll(title, "[\\\\/:*?\\\"<>|]", "_")
+            chapterFolder = chapterDir + "/" + chapNumStr + "-" + safeChapTitle
             set(chapMap, "folder", chapterFolder)
 
-            // DOWNLOAD IMAGES
-            map b2 = browserLaunch("playwright", true)
+            // download images
+            b2 = browserLaunch("playwright", true)
             browserGoto(b2, fullUrl)
             waitForHydration(b2, "body", 30000)
             sleep(5000)
@@ -93,37 +139,38 @@ if (length(chapters) == 0) {
             chapterId = get(chapParts, length(chapParts) - 1)
 
             apiUrl = "https://api.mangadex.org/at-home/server/" + chapterId
-            map headers = { "Accept": "application/json" }
+            headers = { "Accept": "application/json" }
             apiJsonText = fetchText(apiUrl, headers)
-            map apiJson = jsonToMap(apiJsonText)
+            apiJson = jsonToMap(apiJsonText)
 
             baseUrl = get(apiJson, "baseUrl")
-            map chapterInfo = get(apiJson, "chapter")
+            chapterInfo = get(apiJson, "chapter")
             hashVal = get(chapterInfo, "hash")
-            list dataList = get(chapterInfo, "data")
+            dataList = get(chapterInfo, "data")
 
             println("Downloading " + length(dataList) + " images for chapter: " + title)
 
-            imgIndex = 0
             pagesList = []
+            imgIndex = 0
             while (imgIndex < length(dataList)) {
                 filename = get(dataList, imgIndex)
                 imgUrl = baseUrl + "/data/" + hashVal + "/" + filename
                 imgBytes = fetchBytes(imgUrl)
-                filePath = chapterFolder + "/image_" + imgIndex + ".jpg"
+                filePath = chapterFolder + "/page_" + imgIndex + ".jpg"
                 writeBytes(filePath, imgBytes)
                 append(pagesList, filePath)
                 imgIndex = imgIndex + 1
             }
 
             set(chapMap, "pages", pagesList)
+            // append to maintain chronological order
+            chList = get(meta, "chapters")
             append(chList, chapMap)
             set(meta, "chapters", chList)
             writeFile(metaFile, toJson(meta))
 
             println("Finished chapter: " + title)
         }
-
         j = j + 1
     }
 }
@@ -135,31 +182,94 @@ println("Download complete.")
 // === CREATE EPUB ===
 println("Creating EPUB...")
 
+// Delete existing EPUB if it exists
+epubPath = mangaDir + "/" + safeTitle + ".epub"
+if (fileExists(epubPath)) {
+    println("Removing existing EPUB...")
+    writeFile(epubPath, "")  // Clear the file first to ensure no conflicts
+}
+
+// Get cover image by visiting the manga page
+println("Fetching cover image...")
+b3 = browserLaunch("playwright", true)
+browserGoto(b3, mangaUrl)
+waitForHydration(b3, "body", 30000)
+mangaPage = browserContent(b3)
+browserClose(b3)
+
+// Attempt to find cover image
+coverImgUrl = selectAttr(mangaPage, "img.cover-image, img.cover", "src")
+coverImgBytes = null
+if (coverImgUrl == null || length(coverImgUrl) == 0) {
+    println("No cover image found.")
+} else {
+    if (!startsWith(coverImgUrl, "http")) {
+        if (startsWith(coverImgUrl, "/")) {
+            coverImgUrl = "https://mangadex.org" + coverImgUrl
+        } else {
+            coverImgUrl = mangaUrl + "/" + coverImgUrl
+        }
+    }
+    println("Downloading cover image: " + coverImgUrl)
+    coverImgBytes = fetchBytes(coverImgUrl)
+}
+
 epubCreate("book")
 epubMetadata(book, get(meta, "title"), "Unknown", "en")
 
-for (entry in get(meta, "chapters")) {
-    chapTitle = get(entry, "title")
-    chapNum = get(entry, "chapter_number")
-    pages = get(entry, "pages")
+if (coverImgBytes != null) {
+    epubSetCover(book, "cover.jpg", coverImgBytes)
+}
+
+// Sort chapters by chapter number (ascending)
+chapList = get(meta, "chapters")
+sortedChapList = []
+i = 0
+while (i < length(chapList)) {
+    minIdx = i
+    j = i + 1
+    while (j < length(chapList)) {
+        if (get(get(chapList, j), "chapter_number") < get(get(chapList, minIdx), "chapter_number")) {
+            minIdx = j
+        }
+        j = j + 1
+    }
+    // Swap
+    if (minIdx != i) {
+        temp = get(chapList, i)
+        set(chapList, i, get(chapList, minIdx))
+        set(chapList, minIdx, temp)
+    }
+    i = i + 1
+}
+
+// Add chapters in order
+println("Adding chapters to EPUB...")
+imgNameCounter = 0  // Global counter to ensure unique image names
+for (chap in chapList) {
+    chapTitle = get(chap, "title")
+    chapNum = get(chap, "chapter_number")
+    pages = get(chap, "pages")
     chapFileName = "chapter_" + chapNum + ".xhtml"
+    
+    println("Processing chapter " + chapNum + ": " + chapTitle)
 
     html = "<html xmlns='http://www.w3.org/1999/xhtml'><head><title>" + chapTitle + "</title></head><body>"
     html = html + "<h1>" + chapTitle + "</h1>"
 
     imgCount = 0
-    for (img in pages) {
-        imgName = "ch" + chapNum + "_img" + imgCount + ".jpg"
-        imgBytes = readBytes(img)
-        epubAddImage(book, imgName, imgBytes)
-        html = html + "<div><img src='" + imgName + "' style='max-width:100%; height:auto;'/></div>"
+    for (imgPath in pages) {
+        uniqueImgName = "ch" + chapNum + "_page_" + (imgCount + 1) + ".jpg"
+        imgBytes = readBytes(imgPath)
+        epubAddImage(book, uniqueImgName, imgBytes)
+        html = html + "<div><img src='" + uniqueImgName + "' style='max-width:100%; height:auto;'/></div>"
         imgCount = imgCount + 1
     }
 
     html = html + "</body></html>"
-    epubAddChapter(book, "Ch. " + chapNum, html, chapFileName)
+    bookmarkTitle = "Chapter " + chapNum + " - " + chapTitle
+    epubAddChapter(book, bookmarkTitle, html, chapFileName)
 }
 
-epubPath = mangaDir + "/" + safeTitle + ".epub"
 epubSave(book, epubPath)
 println("EPUB saved to: " + epubPath)
