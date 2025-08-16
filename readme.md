@@ -237,7 +237,7 @@ mvn test
 
 ## 📜 License
 
-MIT License © 2025 — Developed by **[University of Kent project team](https://github.com/synte/)**
+MIT License © 2025
 
 ---
 
