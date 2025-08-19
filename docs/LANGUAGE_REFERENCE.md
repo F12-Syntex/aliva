@@ -1,6 +1,6 @@
 # Aliva Language Reference
 
-_Generated Tue, 19 Aug 2025 08:38:53 +0100_
+_Generated Tue, 19 Aug 2025 10:21:37 +0100_
 
 ## Language Specification
 
@@ -148,14 +148,13 @@ ARGUMENTS : 'arguments';
 // Whitespace & Comments
 WS : [ \t\r\n]+ -> skip;
 COMMENT : '//' ~[\r\n]* -> skip;
-
 ```
 </details>
 
 ## Functions
 
-- `append(list, value:any)` : Appends a value to a list.
-- `appendFile(path:string, content:string)` : Appends text content to a file, creating it if needed.
+- `append(list, value:any)` : Appends a value to a list. List must be mutable.
+- `appendFile(path:string, content:string)` : Appends text content (UTF-8) to a file, creating it if needed.
 - `browserClick(browser:BrowserEngine, selector:string)` : Clicks an element matching the selector.
 - `browserClose(browser:BrowserEngine)` : Closes the browser and releases resources.
 - `browserContent(browser:BrowserEngine) -> Document` : Returns the current page content parsed as HTML Document.
@@ -176,51 +175,45 @@ COMMENT : '//' ~[\r\n]* -> skip;
 - `epubMetadata(book:Book, title:string, author:string, language:string)` : Sets title, author and language metadata on the EPUB.
 - `epubSave(book:Book, filePath:string)` : Saves the EPUB to a file path.
 - `epubSetCover(book:Book, imageBytes:byte[], [imageName:string])` : Sets the cover image for the EPUB.
-- `fetch(url:string) -> Document` : Fetches a URL with HTTP GET and parses the response as an HTML Document.
-- `fetchBytes(url:string) -> byte[]` : Downloads the content at the given URL as bytes.
-- `fetchLocal(html:string) -> Document` : Parses a provided HTML string into a Document.
-- `fetchPost(url:string, params:map<string,string>) -> Document` : POSTs a form to a URL and parses the response as an HTML Document.
-- `fetchText(url:string, headers:map<string,string>) -> string` : Fetches a URL as text with optional headers.
 - `fileExists(path:string) -> boolean` : Checks whether a file exists.
 - `flatten(list<list|any>) -> list` : Flattens a one-level nested list.
 - `formatNumber(number:number, pattern:string) -> string` : Formats a number using a DecimalFormat pattern.
 - `get(target:list|map, key:number|string) -> any` : Gets an element from a list by index or a map by key.
 - `getNumbers(string) -> list<string>` : Extracts all sequences of digits from the string.
-- `html(documentOrValue:any) -> string` : Returns the outer HTML if input is a Document; otherwise stringifies the input.
+- `html(doc:Document) -> string` : Returns the full HTML string of the given Document.
 - `indexOf(list, value:any) -> number` : Returns the index of the first occurrence of value in a list, or -1.
 - `isList(value:any) -> boolean` : Checks if a value is a list.
 - `isMap(value:any) -> boolean` : Checks if a value is a map.
 - `join(list:list<string>, delimiter:string) -> string` : Joins a list of strings with the specified delimiter.
 - `jsonToMap(json:string) -> map` : Parses a JSON object string into a Map.
-- `length(value:list|string) -> number` : Returns the length of a list or a string.
+- `length(value:list|string|array) -> number` : Returns the length of a list, string, or array (including byte[]).
 - `lower(string) -> string` : Converts all of the characters in the string to lowercase.
 - `matches(string:string, regex:string) -> boolean` : Determines if the string matches the given regex.
 - `mkdirs(path:string)` : Creates directories recursively.
 - `parseJson(json:string) -> any` : Parses a JSON string into Java objects (Map/List/primitive).
-- `print(...values)` : Prints arguments without a trailing newline.
-- `println(...values)` : Prints arguments followed by a newline.
+- `print(...values) -> string` : Prints arguments without a trailing newline. Also returns the printed string.
+- `println(...values) -> string` : Prints arguments followed by a newline. Also returns the printed string.
 - `random() -> number` : Returns a random number in [0, 1).
 - `range(start:number, end:number, [step:number]) -> list<number>` : Creates a list of numbers from start to end inclusive, with optional step.
-- `readBytes(path:string) -> byte[]` : Reads a file as binary data.
-- `readFile(path:string) -> string|null` : Reads a text file and returns its contents, or null if it does not exist.
+- `readBytes(path:string) -> byte[]` : Reads a file as binary data, or empty byte[] if it does not exist.
+- `readFile(path:string) -> string` : Reads a text file (UTF-8) and returns its contents, or empty string if it does not exist.
 - `repeat(value:any, times:number) -> list` : Creates a list by repeating a value N times.
 - `replace(original:string, target:string, replacement:string) -> string` : Replaces occurrences of a substring within a string with another string.
-- `replaceAll(string:string, target:string, replacement:string) -> string` : Replaces each literal occurrence of target in the string with replacement.
+- `replaceAll(string:string, regex:string, replacement:string) -> string` : Replaces each substring of this string that matches the given regex with the replacement.
 - `reverse(list) -> list` : Returns a reversed copy of a list.
-- `safeFetch(url:string, [maxRetries:number], [delaySeconds:number]) -> Document` : Fetches a URL with retry/backoff on HTTP 429 responses.
 - `sanitizeFilename(string) -> string` : Sanitizes a string for use as a filename by replacing disallowed characters with underscores.
-- `selectAll(documentOrElement:Document|Element, selector:string) -> list<Element>` : Returns a list of elements matching the selector.
-- `selectAllAttr(documentOrElement:Document|Element, selector:string, attr:string) -> list<string>` : Selects all elements matching the selector and returns the specified attribute values.
-- `selectAllText(documentOrElement:Document|Element, selector:string) -> list<string>` : Selects all elements matching the selector and returns their text content.
-- `selectAttr(documentOrElement:Document|Element, selector:string, attr:string) -> string` : Selects the first element matching the selector and returns an attribute value.
-- `selectHtml(documentOrElement:Document|Element, selector:string) -> string` : Selects the first element matching the selector and returns its outer HTML.
-- `selectText(documentOrElement:Document|Element, selector:string) -> string` : Selects the first element matching the selector and returns its text.
-- `set(target:list|map, key:number|string, value:any)` : Sets a value on a list by index or a map by key.
+- `selectAll(doc:Document, selector:string) -> list<Element>` : Selects all elements by CSS selector and returns them as a list of elements.
+- `selectAllAttr(doc:Document, selector:string, attr:string) -> list<string>` : Selects all elements by CSS selector and returns the specified attribute values (empty when missing).
+- `selectAllText(doc:Document, selector:string) -> list<string>` : Selects all elements by CSS selector and returns their text content as a list.
+- `selectAttr(doc:Document, selector:string, attr:string) -> string` : Selects the first element by CSS selector and returns an attribute value, or empty string.
+- `selectHtml(doc:Document, selector:string) -> string` : Selects the first element by CSS selector and returns its outer HTML, or empty string.
+- `selectText(doc:Document, selector:string) -> string` : Selects the first element by CSS selector and returns its text, or empty string.
+- `set(target:list|map, key:number|string, value:any)` : Sets a value on a list by index or a map by key. List must be mutable.
 - `sleep(ms:number)` : Sleeps for the given number of milliseconds.
 - `slice(list, start:number, end:number) -> list` : Returns a sublist from start index (inclusive) to end index (exclusive, clamped).
 - `sortBy(listOfMaps:list<map>, key:string) -> list<map>` : Returns a new list of maps sorted ascending by the specified key.
 - `split(string:string, regex:string) -> list<string>` : Splits the string around matches of the given regex.
-- `toJson(value:any) -> string` : Serializes a value to a pretty-printed JSON string.
+- `toJson(value:any) -> string` : Serializes a value to a compact JSON string.
 - `toNumber(value:any) -> number` : Converts a value to a number or throws if it cannot be parsed.
 - `toString(value:any) -> string` : Converts a value to a string, null becomes empty string.
 - `trim(string) -> string` : Trims whitespace from the start and end of the string.
@@ -228,4 +221,4 @@ COMMENT : '//' ~[\r\n]* -> skip;
 - `urlSlug(url:string) -> string` : Extracts the last path segment from a URL (without query).
 - `waitForHydration(browser:BrowserEngine, selector:string, [timeoutMs:number])` : Waits for a selector indicating client-side hydration to complete.
 - `writeBytes(path:string, data:byte[])` : Writes binary data to a file.
-- `writeFile(path:string, content:string)` : Writes text content to a file, creating parent directories if necessary.
+- `writeFile(path:string, content:string)` : Writes text content (UTF-8) to a file, creating parent directories if necessary.
