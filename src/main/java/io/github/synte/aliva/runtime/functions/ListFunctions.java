@@ -13,10 +13,34 @@ import io.github.synte.aliva.runtime.FunctionRegistry;
 public class ListFunctions {
 
     public static void register(FunctionRegistry registry) {
-        registry.register("length", (args, vars) -> (args[0] instanceof List<?> list) ? list.size() : args[0].toString().length(), new FunctionData(
+        registry.register("length", (args, vars) -> {
+            Object v = args[0];
+            if (v instanceof List<?> list) {
+                return list.size();
+            }
+            if (v instanceof String s) {
+                return s.length();
+            }
+            if (v != null) {
+                Class<?> cls = v.getClass();
+                if (cls.isArray()) {
+                    if (v instanceof byte[] ba) return ba.length;
+                    if (v instanceof short[] a) return a.length;
+                    if (v instanceof int[] a) return a.length;
+                    if (v instanceof long[] a) return a.length;
+                    if (v instanceof char[] a) return a.length;
+                    if (v instanceof float[] a) return a.length;
+                    if (v instanceof double[] a) return a.length;
+                    if (v instanceof boolean[] a) return a.length;
+                    if (v instanceof Object[] oa) return oa.length;
+                    return java.lang.reflect.Array.getLength(v);
+                }
+            }
+            return String.valueOf(v).length();
+        }, new FunctionData(
             "length",
-            "Returns the length of a list or a string.",
-            "length(value:list|string) -> number"
+            "Returns the length of a list, string, or array (including byte[]).",
+            "length(value:list|string|array) -> number"
         ));
 
         registry.register("get", (args, vars) -> {
@@ -30,7 +54,7 @@ public class ListFunctions {
             } else if (target instanceof java.util.Map) {
                 return ((java.util.Map<?, ?>) target).get(key);
             } else {
-                throw new RuntimeException("get() target is not list/map — got: "
+                throw new RuntimeException("get() target is not list/map ΓÇö got: "
                         + (target == null ? "null" : target.getClass().getName()));
             }
         }, new FunctionData(

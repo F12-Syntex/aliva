@@ -71,18 +71,12 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
             value = visit(ctx.expression());
         } else {
             value = switch (type) {
-                case "string" ->
-                    "";
-                case "number" ->
-                    0.0;
-                case "boolean" ->
-                    false;
-                case "list" ->
-                    new ArrayList<>();
-                case "map" ->
-                    new LinkedHashMap<>();
-                default ->
-                    null;
+                case "string" -> "";
+                case "number" -> 0.0;
+                case "boolean" -> false;
+                case "list" -> new ArrayList<>();
+                case "map" -> new LinkedHashMap<>();
+                default -> null;
             };
         }
         variables.put(name, value);
@@ -174,6 +168,30 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
         return null;
     }
 
+    // Ternary operator handling for:
+    // expression : logicalOrExpr ('?' expression ':' expression)?
+    @Override
+    public Object visitExpression(ScraperDSLParser.ExpressionContext ctx) {
+        // If there's no '?' ... ':' part, evaluate logicalOrExpr as-is
+        if (ctx.getChildCount() < 5 || ctx.expression().size() < 2) {
+            // No ternary: just delegate to logicalOrExpr
+            return visit(ctx.logicalOrExpr());
+        }
+
+        // There is a ternary in this node.
+        // Condition is the logicalOrExpr to the left of '?'
+        Object conditionVal = visit(ctx.logicalOrExpr());
+        boolean cond = toBoolean(conditionVal);
+
+        // The two subsequent expressions correspond to then and else
+        // expression(0) -> then branch, expression(1) -> else branch
+        if (cond) {
+            return visit(ctx.expression(0));
+        } else {
+            return visit(ctx.expression(1));
+        }
+    }
+
     @Override
     public Object visitEqualityExpr(ScraperDSLParser.EqualityExprContext ctx) {
         Object left = visit(ctx.comparisonExpr(0));
@@ -181,12 +199,9 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
             String op = ctx.getChild(i * 2 - 1).getText();
             Object right = visit(ctx.comparisonExpr(i));
             left = switch (op) {
-                case "==" ->
-                    compareEquals(left, right);
-                case "!=" ->
-                    !compareEquals(left, right);
-                default ->
-                    throw new RuntimeException("Unknown equality op: " + op);
+                case "==" -> compareEquals(left, right);
+                case "!=" -> !compareEquals(left, right);
+                default -> throw new RuntimeException("Unknown equality op: " + op);
             };
         }
         return left;
@@ -201,16 +216,11 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
             double l = toNumber(left);
             double r = toNumber(right);
             left = switch (op) {
-                case "<" ->
-                    l < r;
-                case "<=" ->
-                    l <= r;
-                case ">" ->
-                    l > r;
-                case ">=" ->
-                    l >= r;
-                default ->
-                    throw new RuntimeException("Unknown comparison op: " + op);
+                case "<" -> l < r;
+                case "<=" -> l <= r;
+                case ">" -> l > r;
+                case ">=" -> l >= r;
+                default -> throw new RuntimeException("Unknown comparison op: " + op);
             };
         }
         return left;
@@ -245,14 +255,10 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
             double l = toNumber(left);
             double r = toNumber(right);
             left = switch (op) {
-                case "*" ->
-                    l * r;
-                case "/" ->
-                    l / r;
-                case "%" ->
-                    l % r;
-                default ->
-                    throw new RuntimeException("Unknown multiplicative op: " + op);
+                case "*" -> l * r;
+                case "/" -> l / r;
+                case "%" -> l % r;
+                default -> throw new RuntimeException("Unknown multiplicative op: " + op);
             };
         }
         return left;
@@ -264,12 +270,9 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
             String opText = ctx.op.getText();
             Object val = visit(ctx.unaryExpr());
             return switch (opText) {
-                case "-" ->
-                    -toNumber(val);
-                case "!" ->
-                    !toBoolean(val);
-                default ->
-                    throw new RuntimeException("Unknown unary op: " + opText);
+                case "-" -> -toNumber(val);
+                case "!" -> !toBoolean(val);
+                default -> throw new RuntimeException("Unknown unary op: " + opText);
             };
         }
         return super.visitUnaryExpr(ctx);
@@ -397,7 +400,10 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
             return b;
         }
         if (value instanceof Number n) {
-            return n.doubleValue() != 0;
+            return n.doubleValue() != 0.0;
+        }
+        if (value instanceof String s) {
+            return !s.isEmpty();
         }
         return value != null;
     }

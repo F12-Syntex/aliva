@@ -36,8 +36,20 @@ public class JsonFunctions {
 
         registry.register("jsonToMap", (args, vars) -> {
             try {
+                Object in = args[0];
+                if (in instanceof Map<?, ?>) {
+                    return in;
+                }
+                String s = in.toString();
+                // Some DSL string literals may contain backslashes for quotes; try a minimal unescape
+                if (s.contains("\\\"")) {
+                    s = s.replace("\\\"", "\"");
+                }
+                if (s.contains("\\\\")) {
+                    s = s.replace("\\\\", "\\");
+                }
                 com.fasterxml.jackson.databind.ObjectMapper m = new com.fasterxml.jackson.databind.ObjectMapper();
-                return m.readValue(args[0].toString(), Map.class);
+                return m.readValue(s, Map.class);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to parse JSON into Map", e);
             }

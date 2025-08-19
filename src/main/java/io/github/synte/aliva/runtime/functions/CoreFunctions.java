@@ -10,21 +10,23 @@ public class CoreFunctions {
 
     public static void register(FunctionRegistry registry) {
         registry.register("print", (args, vars) -> {
-            doPrint(args, false);
-            return null;
+            String s = buildString(args);
+            System.out.print(s);
+            return s; // also return the printed string so tests can assert without capturing stdout
         }, new FunctionData(
-            "print",
-            "Prints arguments without a trailing newline.",
-            "print(...values)"
+                "print",
+                "Prints arguments without a trailing newline. Also returns the printed string.",
+                "print(...values) -> string"
         ));
 
         registry.register("println", (args, vars) -> {
-            doPrint(args, true);
-            return null;
+            String s = buildString(args);
+            System.out.println(s);
+            return s; // also return the printed string so tests can assert without capturing stdout
         }, new FunctionData(
-            "println",
-            "Prints arguments followed by a newline.",
-            "println(...values)"
+                "println",
+                "Prints arguments followed by a newline. Also returns the printed string.",
+                "println(...values) -> string"
         ));
 
         registry.register("get", (args, vars) -> {
@@ -34,16 +36,21 @@ public class CoreFunctions {
                 if (!(key instanceof Number)) {
                     throw new RuntimeException("get() key for List must be a number, got: " + key);
                 }
-                return ((List<?>) target).get(((Number) key).intValue());
+                List<?> list = (List<?>) target;
+                int idx = ((Number) key).intValue();
+                if (idx < 0 || idx >= list.size()) {
+                    throw new RuntimeException("get() index out of range: " + idx + " (size=" + list.size() + ")");
+                }
+                return list.get(idx);
             } else if (target instanceof Map) {
                 return ((Map<?, ?>) target).get(key);
             }
             throw new RuntimeException("get() target is not list/map — got: "
                     + (target == null ? "null" : target.getClass().getName()));
         }, new FunctionData(
-            "get",
-            "Safely gets a value from a list by index or a map by key.",
-            "get(target:list|map, key:number|string) -> any"
+                "get",
+                "Safely gets a value from a list by index (with bounds check) or a map by key.",
+                "get(target:list|map, key:number|string) -> any"
         ));
 
         registry.register("set", (args, vars) -> {
@@ -51,7 +58,13 @@ public class CoreFunctions {
             Object key = args[1];
             Object value = args[2];
             if (target instanceof List) {
-                ((List) target).set(((Number) key).intValue(), value);
+                try {
+                    ((List) target).set(((Number) key).intValue(), value);
+                } catch (UnsupportedOperationException uoe) {
+                    throw new RuntimeException("set() requires a mutable List (e.g., ArrayList)", uoe);
+                } catch (IndexOutOfBoundsException ioobe) {
+                    throw new RuntimeException("set() index out of range: " + key, ioobe);
+                }
             } else if (target instanceof Map) {
                 ((Map) target).put(key.toString(), value);
             } else {
@@ -60,9 +73,9 @@ public class CoreFunctions {
             }
             return null;
         }, new FunctionData(
-            "set",
-            "Sets a value on a list by index or a map by key.",
-            "set(target:list|map, key:number|string, value:any)"
+                "set",
+                "Sets a value on a list by index or a map by key. List must be mutable.",
+                "set(target:list|map, key:number|string, value:any)"
         ));
 
         registry.register("append", (args, vars) -> {
@@ -73,33 +86,43 @@ public class CoreFunctions {
                         "append() target is not a list — got: "
                         + (target == null ? "null" : target.getClass().getName()));
             }
-            ((List) target).add(value);
+            try {
+                ((List) target).add(value);
+            } catch (UnsupportedOperationException uoe) {
+                throw new RuntimeException("append() requires a mutable List (e.g., ArrayList)", uoe);
+            }
             return null;
         }, new FunctionData(
-            "append",
-            "Appends a value to a list.",
-            "append(list, value:any)"
+                "append",
+                "Appends a value to a list. List must be mutable.",
+                "append(list, value:any)"
         ));
 
         registry.register("classOf", (args, vars) -> {
             Object obj = args[0];
-            return obj == null ? "null" : obj.getClass().getName();
+            if (obj == null) {
+                return "null";
+            }
+            String simple = obj.getClass().getSimpleName();
+            return (simple != null && !simple.isEmpty())
+                    ? simple
+                    : obj.getClass().getName();
         }, new FunctionData(
-            "classOf",
-            "Returns the runtime class name of a value.",
-            "classOf(value:any) -> string"
+                "classOf",
+                "Returns the runtime class name of a value.",
+                "classOf(value:any) -> string"
         ));
 
         registry.register("isList", (args, vars) -> args[0] instanceof List, new FunctionData(
-            "isList",
-            "Checks if a value is a list.",
-            "isList(value:any) -> boolean"
+                "isList",
+                "Checks if a value is a list.",
+                "isList(value:any) -> boolean"
         ));
 
         registry.register("isMap", (args, vars) -> args[0] instanceof Map, new FunctionData(
-            "isMap",
-            "Checks if a value is a map.",
-            "isMap(value:any) -> boolean"
+                "isMap",
+                "Checks if a value is a map.",
+                "isMap(value:any) -> boolean"
         ));
 
         registry.register("toString", (args, vars) -> {
@@ -108,26 +131,29 @@ public class CoreFunctions {
             }
             return String.valueOf(args[0]);
         }, new FunctionData(
-            "toString",
-            "Converts a value to a string, null becomes empty string.",
-            "toString(value:any) -> string"
+                "toString",
+                "Converts a value to a string, null becomes empty string.",
+                "toString(value:any) -> string"
         ));
     }
 
-    private static void doPrint(Object[] args, boolean newline) {
-        for (int i = 0; i < args.length; i++) {
-            Object val = args[i];
-            if (val instanceof Double d && d % 1 == 0) {
-                System.out.print((long) d.doubleValue());
-            } else {
-                System.out.print(val != null ? val : "null");
-            }
-            if (i < args.length - 1) {
-                System.out.print(" ");
+    private static String buildString(Object[] args) {
+        StringBuilder sb = new StringBuilder();
+        boolean appended = false;
+        for (Object val : args) {
+            String str
+                    = val == null ? "null"
+                            : (val instanceof Double d && d % 1 == 0) ? Long.toString(d.longValue())
+                                    : val.toString();
+
+            if (!str.isEmpty()) {
+                if (appended) {
+                    sb.append(' ');
+                }
+                sb.append(str);
+                appended = true;
             }
         }
-        if (newline) {
-            System.out.println();
-        }
+        return sb.toString();
     }
 }

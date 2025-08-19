@@ -30,7 +30,7 @@ public class StringFunctions {
         registry.register("concat", (args, vars) -> {
             StringBuilder sb = new StringBuilder();
             for (Object a : args) {
-                sb.append(a != null ? a.toString() : "null");
+                sb.append(normalizeToString(a));
             }
             return sb.toString();
         }, new FunctionData("concat", "Concatenates multiple strings into one.", "concat(...strings) -> string"));
@@ -87,8 +87,27 @@ public class StringFunctions {
 
     private static List<String> castToStringList(Object obj) {
         if (obj instanceof List<?> rawList) {
-            return rawList.stream().map(o -> o != null ? o.toString() : "null").toList();
+            List<String> out = new ArrayList<>(rawList.size());
+            for (Object o : rawList) {
+                out.add(normalizeToString(o));
+            }
+            return out;
         }
         throw new RuntimeException("Expected a list for join()");
+    }
+
+    private static String normalizeToString(Object val) {
+        if (val == null) return "null";
+        if (val instanceof Number n) {
+            if (n instanceof Double d && d % 1 == 0) {
+                return Long.toString(d.longValue());
+            }
+            if (n instanceof Float f && f % 1 == 0) {
+                return Long.toString(f.longValue());
+            }
+            // Other numbers: use toString
+            return n.toString();
+        }
+        return val.toString();
     }
 }
