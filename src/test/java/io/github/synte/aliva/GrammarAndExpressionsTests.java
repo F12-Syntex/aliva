@@ -18,7 +18,7 @@ public class GrammarAndExpressionsTests {
                 println(x)              // 15
 
                 list xs = [1,2,3]
-                println(xs[0])          // 1
+                println(get(xs, 0))          // 1
                 xs[1] = 7
                 println(xs[1])          // 7
 

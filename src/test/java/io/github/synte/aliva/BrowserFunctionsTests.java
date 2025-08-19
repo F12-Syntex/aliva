@@ -1,17 +1,56 @@
 package io.github.synte.aliva;
 
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import org.junit.jupiter.api.AfterAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import com.sun.net.httpserver.HttpServer;
+
 @Tag("browser")
-@Disabled("Enable when Playwright and browsers are available in CI environment")
 public class BrowserFunctionsTests {
+
+    private static HttpServer server;
+
+    @BeforeAll
+    static void startServer() throws Exception {
+        String html = """
+            <html><body>
+                <input id='q'/>
+                <button id='btn'>Go</button>
+                <div id='out'></div>
+                <script>
+                document.getElementById('btn').addEventListener('click', function() {
+                  document.getElementById('out').textContent = document.getElementById('q').value;
+                });
+                </script>
+            </body></html>
+            """;
+
+        server = HttpServer.create(new InetSocketAddress(8082), 0);
+        server.createContext("/testpage", exchange -> {
+            byte[] resp = html.getBytes();
+            exchange.sendResponseHeaders(200, resp.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(resp);
+            }
+        });
+        server.start();
+    }
+
+    @AfterAll
+    static void stopServer() {
+        if (server != null) {
+            server.stop(0);
+        }
+    }
 
     @Test
     @Timeout(value = 30, unit = TimeUnit.SECONDS)
@@ -34,19 +73,6 @@ public class BrowserFunctionsTests {
     @Test
     @Timeout(value = 30, unit = TimeUnit.SECONDS)
     void testBrowserScrollAndTypeAndClick() {
-        String html = """
-            <html><body>
-                <input id='q'/>
-                <button id='btn'>Go</button>
-                <div id='out'></div>
-                <script>
-                document.getElementById('btn').addEventListener('click', function() {
-                  document.getElementById('out').textContent = document.getElementById('q').value;
-                });
-                </script>
-            </body></html>
-            """;
-        // Requires a local server serving this page; otherwise disable this test or adapt to a known page.
         String script = """
                 any b = browserLaunch(true)
                 browserGoto(b, "http://127.0.0.1:8082/testpage")

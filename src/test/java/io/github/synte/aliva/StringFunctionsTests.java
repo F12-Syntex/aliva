@@ -1,10 +1,9 @@
 package io.github.synte.aliva;
 
-import static org.junit.jupiter.api.Assertions.*;
-
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -22,7 +21,7 @@ public class StringFunctionsTests {
                 println(concat("ab", 1, null, "Z"))        // ab1nullZ
                 println(lower("MiXeD"))                    // mixed
                 println(contains("abcdef", "cd"))          // true
-                println(matches("a123", "a\\\\d+"))        // true
+                println(matches("a123", "a\\d+"))  // true
                 """;
         String out = TestUtils.runScript(script);
         List<String> lines = out.lines().toList();

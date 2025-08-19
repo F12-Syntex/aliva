@@ -14,8 +14,11 @@ public class FunctionRegistry {
     }
 
     public Object invoke(String name, Object[] args, Map<String, Object> vars) {
-        DSLFunctionExecution fn = functions.get(name).getExecution();
-        if (fn == null) throw new RuntimeException("Unknown function: " + name);
+        DSLFunction fnObj = functions.get(name);
+        if (fnObj == null || fnObj.getExecution() == null) {
+            throw new RuntimeException("Unknown function: " + name);
+        }
+        DSLFunctionExecution fn = fnObj.getExecution();
         return fn.apply(args, vars);
     }
 

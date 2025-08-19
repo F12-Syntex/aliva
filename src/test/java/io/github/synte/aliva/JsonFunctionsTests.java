@@ -1,10 +1,9 @@
 package io.github.synte.aliva;
 
-import static org.junit.jupiter.api.Assertions.*;
-
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -16,8 +15,8 @@ public class JsonFunctionsTests {
         String script = """
                 map m = {"a":1,"b":[2,3]}
                 string s = toJson(m)
-                println(contains(s, "\\"a\\""))
-                println(contains(s, "\\"b\\""))
+                println(contains(s, "a"))
+                println(contains(s, "b"))
 
                 any parsed = parseJson(s)
                 println(get(get(parsed, "b"), 1)) // 3

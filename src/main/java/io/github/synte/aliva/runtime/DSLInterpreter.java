@@ -40,7 +40,6 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
 
     public void setScriptArgs(String[] args) {
         this.scriptArgs = args;
-        // Add the arguments to the interpreter's variables
         List<String> argsList = new ArrayList<>();
         for (String arg : args) {
             argsList.add(arg);
@@ -90,13 +89,28 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
             Object container = variables.get(varName);
             Object keyOrIndex = visit(ctx.expression(0));
             Object value = visit(ctx.expression(1));
-            if (container instanceof List<?> list && keyOrIndex instanceof Number num) {
-                ((List<Object>) list).set(num.intValue(), value);
-            } else if (container instanceof Map<?, ?> map) {
-                ((Map<String, Object>) map).put(keyOrIndex.toString(), value);
-            } else {
-                throw new RuntimeException("Invalid indexed assignment to " + varName);
+
+            // List assignment
+            if (container instanceof List<?> list) {
+                Integer idx = null;
+                if (keyOrIndex instanceof Number num) {
+                    idx = num.intValue();
+                } else if (keyOrIndex instanceof String s && s.matches("\\d+")) {
+                    idx = Integer.parseInt(s);
+                }
+                if (idx != null) {
+                    ((List<Object>) list).set(idx, value);
+                    return null;
+                }
             }
+
+            // Map assignment
+            if (container instanceof Map<?, ?> map) {
+                ((Map<String, Object>) map).put(keyOrIndex.toString(), value);
+                return null;
+            }
+
+            throw new RuntimeException("Invalid indexed assignment to " + varName);
         } else {
             variables.put(ctx.ID().getText(), visit(ctx.expression(0)));
         }
@@ -105,16 +119,40 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
 
     @Override
     public Object visitVariableRef(ScraperDSLParser.VariableRefContext ctx) {
-        Object container = variables.get(ctx.ID().getText());
+        String name = ctx.ID().getText();
+
+        // Prevent numeric tokens being treated as variable names
+        if (name.matches("\\d+")) {
+            return Double.parseDouble(name);
+        }
+
+        Object container = variables.get(name);
+        if (container == null) {
+            throw new RuntimeException("Undefined variable: " + name);
+        }
+
         if (ctx.expression() != null) {
             Object keyOrIndex = visit(ctx.expression());
-            if (container instanceof List<?> list && keyOrIndex instanceof Number num) {
-                return list.get(num.intValue());
-            } else if (container instanceof Map<?, ?> map) {
-                return map.get(keyOrIndex.toString());
-            } else {
-                throw new RuntimeException("Invalid index/key access on " + ctx.ID().getText());
+
+            // List indexing
+            if (container instanceof List<?> list) {
+                Integer idx = null;
+                if (keyOrIndex instanceof Number num) {
+                    idx = num.intValue();
+                } else if (keyOrIndex instanceof String s && s.matches("\\d+")) {
+                    idx = Integer.parseInt(s);
+                }
+                if (idx != null) {
+                    return list.get(idx);
+                }
             }
+
+            // Map indexing
+            if (container instanceof Map<?, ?> map) {
+                return map.get(keyOrIndex.toString());
+            }
+
+            throw new RuntimeException("Invalid index/key access on " + ctx.ID().getText());
         }
         return container;
     }
@@ -168,28 +206,46 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
         return null;
     }
 
-    // Ternary operator handling for:
-    // expression : logicalOrExpr ('?' expression ':' expression)?
     @Override
     public Object visitExpression(ScraperDSLParser.ExpressionContext ctx) {
-        // If there's no '?' ... ':' part, evaluate logicalOrExpr as-is
         if (ctx.getChildCount() < 5 || ctx.expression().size() < 2) {
-            // No ternary: just delegate to logicalOrExpr
             return visit(ctx.logicalOrExpr());
         }
-
-        // There is a ternary in this node.
-        // Condition is the logicalOrExpr to the left of '?'
         Object conditionVal = visit(ctx.logicalOrExpr());
         boolean cond = toBoolean(conditionVal);
-
-        // The two subsequent expressions correspond to then and else
-        // expression(0) -> then branch, expression(1) -> else branch
         if (cond) {
             return visit(ctx.expression(0));
         } else {
             return visit(ctx.expression(1));
         }
+    }
+
+    @Override
+    public Object visitLogicalOrExpr(ScraperDSLParser.LogicalOrExprContext ctx) {
+        Object left = visit(ctx.logicalAndExpr(0));
+        for (int i = 1; i < ctx.logicalAndExpr().size(); i++) {
+            String op = ctx.getChild(i * 2 - 1).getText();
+            Object right = visit(ctx.logicalAndExpr(i));
+            switch (op) {
+                case "||" -> left = toBoolean(left) || toBoolean(right);
+                default -> throw new RuntimeException("Unknown logical OR operator: " + op);
+            }
+        }
+        return left;
+    }
+
+    @Override
+    public Object visitLogicalAndExpr(ScraperDSLParser.LogicalAndExprContext ctx) {
+        Object left = visit(ctx.equalityExpr(0));
+        for (int i = 1; i < ctx.equalityExpr().size(); i++) {
+            String op = ctx.getChild(i * 2 - 1).getText();
+            Object right = visit(ctx.equalityExpr(i));
+            switch (op) {
+                case "&&" -> left = toBoolean(left) && toBoolean(right);
+                default -> throw new RuntimeException("Unknown logical AND operator: " + op);
+            }
+        }
+        return left;
     }
 
     @Override
@@ -237,10 +293,8 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
                     (left instanceof String || right instanceof String)
                     ? String.valueOf(left) + String.valueOf(right)
                     : toNumber(left) + toNumber(right);
-                case "-" ->
-                    toNumber(left) - toNumber(right);
-                default ->
-                    throw new RuntimeException("Unknown additive op: " + op);
+                case "-" -> toNumber(left) - toNumber(right);
+                default -> throw new RuntimeException("Unknown additive op: " + op);
             };
         }
         return left;
@@ -340,11 +394,11 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
     }
 
     public Object visitFunctionLiteral(ScraperDSLParser.FunctionLiteralContext ctx) {
-        // Return a Runnable capturing the block's code for deferred execution
         return new DSLRunnable(ctx.block());
     }
 
     public class DSLRunnable implements Runnable {
+
         private final ScraperDSLParser.BlockContext blockCtx;
 
         public DSLRunnable(ScraperDSLParser.BlockContext blockCtx) {
@@ -367,7 +421,19 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
     public Object visitFuncCall(ScraperDSLParser.FuncCallContext ctx) {
         String name = ctx.ID().getText();
         Object[] args = ctx.expression().stream().map(this::visit).toArray();
+
+        // Always route through the registry for consistent behavior
         return functions.invoke(name, args, variables);
+    }
+
+    private String formatValue(Object val) {
+        if (val instanceof Double d) {
+            if (d % 1 == 0) {
+                return String.valueOf(d.longValue());
+            }
+            return String.valueOf(d);
+        }
+        return String.valueOf(val);
     }
 
     private boolean compareEquals(Object left, Object right) {
@@ -377,10 +443,27 @@ public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
         if (left == null || right == null) {
             return false;
         }
+
         if (left instanceof Number && right instanceof Number) {
-            return Double.compare(((Number) left).doubleValue(), ((Number) right).doubleValue()) == 0;
+            return Double.compare(((Number) left).doubleValue(),
+                    ((Number) right).doubleValue()) == 0;
         }
-        // Normalize to string for comparison (important for DSL map field lookups)
+
+        if (left instanceof Number && right instanceof String s) {
+            try {
+                return Double.compare(((Number) left).doubleValue(),
+                        Double.parseDouble(s)) == 0;
+            } catch (NumberFormatException ignore) {
+            }
+        }
+        if (right instanceof Number && left instanceof String s) {
+            try {
+                return Double.compare(((Number) right).doubleValue(),
+                        Double.parseDouble(s)) == 0;
+            } catch (NumberFormatException ignore) {
+            }
+        }
+
         return String.valueOf(left).equals(String.valueOf(right));
     }
 

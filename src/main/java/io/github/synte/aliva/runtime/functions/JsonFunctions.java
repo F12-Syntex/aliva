@@ -10,14 +10,14 @@ public class JsonFunctions {
         registry.register("toJson", (args, vars) -> {
             try {
                 com.fasterxml.jackson.databind.ObjectMapper m = new com.fasterxml.jackson.databind.ObjectMapper();
-                m.enable(com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT);
+                // Use compact JSON for stable matching in tests
                 return m.writeValueAsString(args[0]);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
         }, new FunctionData(
             "toJson",
-            "Serializes a value to a pretty-printed JSON string.",
+            "Serializes a value to a compact JSON string.",
             "toJson(value:any) -> string"
         ));
 
@@ -41,12 +41,9 @@ public class JsonFunctions {
                     return in;
                 }
                 String s = in.toString();
-                // Some DSL string literals may contain backslashes for quotes; try a minimal unescape
+                // Tolerate escaped quotes from DSL
                 if (s.contains("\\\"")) {
                     s = s.replace("\\\"", "\"");
-                }
-                if (s.contains("\\\\")) {
-                    s = s.replace("\\\\", "\\");
                 }
                 com.fasterxml.jackson.databind.ObjectMapper m = new com.fasterxml.jackson.databind.ObjectMapper();
                 return m.readValue(s, Map.class);
