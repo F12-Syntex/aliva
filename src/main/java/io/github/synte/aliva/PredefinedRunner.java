@@ -13,10 +13,10 @@ import io.github.synte.aliva.runtime.DSLInterpreter;
 public class PredefinedRunner {
     public static void main(String[] args) throws Exception {
         // Hardcoded path to a script file
-        String scriptPath = "scripts/manga_downloader.aliva";
+        String scriptPath = "scripts/novel_downloader.aliva";
         
         // Hardcoded manga URL as argument
-        String[] scriptArgs = {"https://mangadex.org/title/5836cf0e-bf53-4bba-9f18-dcada2fd5bed/kirei-na-kimi-ni-korosaretai"};
+        String[] scriptArgs = {"https://novelbin.me/novel-book/peak-reversal"};
         
         System.out.println("=== Running: " + scriptPath + " with arguments: " + String.join(", ", scriptArgs) + " ===");
         runScript(scriptPath, scriptArgs);

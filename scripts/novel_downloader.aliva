@@ -1,0 +1,205 @@
+// === CONFIG ===
+rootDir = "H:/Novels/Downloader/novels"
+if (length(arguments) >= 1) {
+    novelUrl = get(arguments, 0)
+} else {
+    novelUrl = "https://novelbin.me/novel-book/peak-reversal"
+}
+
+// === SLUG EXTRACTION ===
+urlParts = split(novelUrl, "/")
+novelSlug = get(urlParts, length(urlParts) - 1)
+if (contains(novelSlug, "?")) {
+    novelSlug = split(novelSlug, "?")[0]
+}
+safeTitle = novelSlug
+
+// === PATHS ===
+novelDir = rootDir + "/" + safeTitle
+chaptersDir = novelDir + "/chapters"
+metaFile = novelDir + "/metadata.json"
+
+writeFile(novelDir + "/.init", "")
+writeFile(chaptersDir + "/.init", "")
+
+// === META INIT ===
+map meta = { "title": safeTitle, "url": novelUrl, "chapters": [] }
+if (fileExists(metaFile)) {
+    existingContent = readFile(metaFile)
+    if (length(existingContent) > 0) {
+        existingMeta = jsonToMap(existingContent)
+        if (existingMeta != null) {
+            meta = existingMeta
+        }
+    }
+}
+if (get(meta, "chapters") == null) {
+    set(meta, "chapters", [])
+}
+
+// === SCRAPE MAIN PAGE ===
+println("Launching browser for metadata...")
+b = browserLaunch("playwright", true)
+browserGoto(b, novelUrl)
+waitForHydration(b, "body", 30000)
+page = browserContent(b)
+
+title   = selectText(page, "h3.title[itemprop=name]")
+author  = selectAttr(page, "meta[itemprop=name]", "content")
+genres  = join(selectAllText(page, "ul.info.info-meta li:contains(Genre:) a"), ", ")
+status  = selectText(page, "ul.info.info-meta li:contains(Status:) a")
+rating  = selectText(page, "span[itemprop=ratingValue]")
+reviews = selectText(page, "span[itemprop=reviewCount]")
+cover   = selectAttr(page, "meta[itemprop=image]", "content")
+
+if (title != null && length(title) > 0) { set(meta, "title", title) }
+if (author != null && length(author) > 0) { set(meta, "author", author) }
+set(meta, "genres", split(genres, ", "))
+set(meta, "status", status)
+set(meta, "rating", rating)
+set(meta, "reviews", reviews)
+set(meta, "cover", cover)
+
+// === SCRAPE CHAPTER LIST ===
+chapTexts = selectAllText(page, ".list-chapter a .nchr-text")
+chapLinks = selectAllAttr(page, ".list-chapter a", "href")
+
+chapList = []
+i = 0
+while (i < length(chapTexts)) {
+    txt = get(chapTexts, i)
+    url = get(chapLinks, i)
+
+    nums = getNumbers(txt)
+    chapNum = 0
+    if (isList(nums) && length(nums) > 0) {
+        chapNum = toNumber(get(nums, 0))
+    } else {
+        chapNum = i + 1
+    }
+
+    append(chapList, {
+        "num": chapNum,
+        "title": txt,
+        "url": url
+    })
+    i = i + 1
+}
+chapList = sortBy(chapList, "num")
+browserClose(b)
+
+// === RESUME ===
+startIndex = 0
+if (fileExists(metaFile)) {
+    existingContent = readFile(metaFile)
+    if (length(existingContent) > 0) {
+        existingMeta = jsonToMap(existingContent)
+        if (existingMeta != null) {
+            meta = existingMeta
+            maxNum = 0
+            for (entry in get(meta, "chapters")) {
+                if (get(entry, "number") > maxNum) {
+                    maxNum = get(entry, "number")
+                }
+            }
+            startIndex = maxNum
+            println("Resuming from chapter " + (maxNum + 1))
+        }
+    }
+} else {
+    println("No metadata found, starting fresh...")
+}
+
+// === DOWNLOAD CHAPTERS ===
+total = length(chapList)
+i = startIndex
+while (i < total) {
+    chapEntry = get(chapList, i)
+    chapNum = get(chapEntry, "num")
+    chapTitle = get(chapEntry, "title")
+    chapUrl = get(chapEntry, "url")
+
+    println("[" + chapNum + "/" + total + "] Downloading: " + chapTitle)
+
+    chapUrl = replace(chapUrl, "novelbin.me", "novelbin.com")
+
+    b2 = browserLaunch("playwright", true)
+    browserGoto(b2, chapUrl)
+    waitForHydration(b2, "body", 30000)   // wait for body
+    sleep(5000)                           // allow ads/lazy load
+    chapDoc = browserContent(b2)
+    browserClose(b2)
+
+    paragraphs = selectAllText(chapDoc, "#chr-content p")
+    if (!isList(paragraphs) || length(paragraphs) == 0) {
+        println("⚠️ Could not find text for " + chapTitle)
+        paragraphs = []
+    }
+    fullText = join(paragraphs, "\n")
+
+    filePath = chaptersDir + "/chapter" + chapNum + ".txt"
+    writeFile(filePath, fullText)
+
+    chList = get(meta, "chapters")
+    if (!isList(chList)) {
+        chList = []
+        set(meta, "chapters", chList)
+    }
+    append(chList, {
+        "number": chapNum,
+        "title": chapTitle,
+        "url": chapUrl,
+        "file": filePath
+    })
+    set(meta, "chapters", chList)
+
+    writeFile(metaFile, toJson(meta))
+    i = i + 1
+}
+println("Download complete. Total chapters: " + length(get(meta, 'chapters')))
+
+// === CREATE EPUB ===
+println("Creating EPUB...")
+epubPath = novelDir + "/" + safeTitle + ".epub"
+if (fileExists(epubPath)) {
+    println("Removing existing EPUB...")
+    writeFile(epubPath, "")
+}
+
+epubCreate("book")
+epubMetadata(book, get(meta, "title"), get(meta, "author"), "en")
+
+coverBytes = null
+coverUrl = get(meta, "cover")
+if (coverUrl != null && length(coverUrl) > 0) {
+    coverBytes = fetchBytes(coverUrl)
+    epubSetCover(book, coverBytes, "cover.jpg")
+}
+
+coverImgTag = ""
+if (coverBytes != null) {
+    coverImgTag = "<div style='text-align:center;'><img src='cover.jpg' style='max-width:100%; height:auto;'/></div>"
+}
+metaHtml = "<html xmlns='http://www.w3.org/1999/xhtml'><head><title>" + get(meta, "title") + "</title></head><body>"
+metaHtml = metaHtml + "<h1>" + get(meta, "title") + "</h1>"
+metaHtml = metaHtml + "<h2>by " + get(meta, "author") + "</h2>"
+metaHtml = metaHtml + coverImgTag
+metaHtml = metaHtml + "<p><b>Genres:</b> " + join(get(meta, "genres"), ", ") + "</p>"
+metaHtml = metaHtml + "<p><b>Status:</b> " + get(meta, "status") + "</p>"
+metaHtml = metaHtml + "<p><b>Rating:</b> " + get(meta, "rating") + " (" + get(meta, "reviews") + " reviews)</p>"
+metaHtml = metaHtml + "</body></html>"
+epubAddChapter(book, "Cover & Info", metaHtml)
+
+for (entry in get(meta, "chapters")) {
+    chapTitle = get(entry, "title")
+    chapText = readFile(get(entry, "file"))
+    chapText = replaceAll(chapText, "&", "&amp;")
+    chapText = replaceAll(chapText, "<", "&lt;")
+    chapText = replaceAll(chapText, ">", "&gt;")
+    chapText = replaceAll(chapText, "\n", "<br/>")
+
+    chapHtml = "<html xmlns='http://www.w3.org/1999/xhtml'><head><title>" + chapTitle + "</title></head><body><h1>" + chapTitle + "</h1><p>" + chapText + "</p></body></html>"
+    epubAddChapter(book, chapTitle, chapHtml)
+}
+epubSave(book, epubPath)
+println("EPUB saved to: " + epubPath)

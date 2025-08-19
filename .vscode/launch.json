@@ -6,6 +6,20 @@
   "configurations": [
     {
       "type": "java",
+      "name": "DocumentationGeneratorMain",
+      "request": "launch",
+      "mainClass": "io.github.synte.aliva.docgen.DocumentationGeneratorMain",
+      "projectName": "aliva"
+    },
+    {
+      "type": "java",
+      "name": "LanguageDocumentationGenerator",
+      "request": "launch",
+      "mainClass": "io.github.synte.aliva.docgen.LanguageDocumentationGenerator",
+      "projectName": "aliva"
+    },
+    {
+      "type": "java",
       "name": "Current File",
       "request": "launch",
       "mainClass": "${file}"

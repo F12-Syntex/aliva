@@ -107,6 +107,30 @@
 
     <build>
         <plugins>
+
+            <!-- Custom documentation generation plugin -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>generate-documentation</id>
+                        <phase>process-classes</phase>
+                        <goals>
+                            <goal>java</goal>
+                        </goals>
+                        <configuration>
+                            <mainClass>io.github.synte.aliva.docgen.DocumentationGeneratorMain</mainClass>
+                            <cleanupDaemonThreads>false</cleanupDaemonThreads>
+                            <arguments>
+                                <argument>${project.basedir}/docs/language-reference.md</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            
             <!-- ANTLR code generation -->
             <plugin>
                 <groupId>org.antlr</groupId>

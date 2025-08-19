@@ -8,6 +8,16 @@ import java.util.Map;
 
 import io.github.synte.aliva.parser.ScraperDSLBaseVisitor;
 import io.github.synte.aliva.parser.ScraperDSLParser;
+import io.github.synte.aliva.runtime.functions.BrowserFunctions;
+import io.github.synte.aliva.runtime.functions.CoreFunctions;
+import io.github.synte.aliva.runtime.functions.EpubFunctions;
+import io.github.synte.aliva.runtime.functions.FileFunctions;
+import io.github.synte.aliva.runtime.functions.HtmlSelectorFunctions;
+import io.github.synte.aliva.runtime.functions.HttpFunctions;
+import io.github.synte.aliva.runtime.functions.JsonFunctions;
+import io.github.synte.aliva.runtime.functions.ListFunctions;
+import io.github.synte.aliva.runtime.functions.MiscFunctions;
+import io.github.synte.aliva.runtime.functions.StringFunctions;
 
 public class DSLInterpreter extends ScraperDSLBaseVisitor<Object> {
 
