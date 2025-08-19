@@ -1,5 +1,6 @@
 package io.github.synte.aliva.runtime.functions;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -23,6 +24,14 @@ public class StringFunctions {
                 "Trims whitespace from the start and end of the string.",
                 "trim(string) -> string"));
 
+
+        registry.register("base64Decode", (args, vars) -> {
+            String input = String.valueOf(args[0]);
+            return new String(java.util.Base64.getDecoder().decode(input), StandardCharsets.UTF_8);
+        }, new FunctionData("base64Decode",
+            "Decodes a Base64 encoded string.",
+            "base64Decode(encoded:string) -> string"));
+
         registry.register("split", (args, vars) -> Arrays.asList(String.valueOf(args[0])
                 .split(String.valueOf(args[1]))),
             new FunctionData("split",
@@ -34,6 +43,12 @@ public class StringFunctions {
             new FunctionData("join",
                 "Joins a list of strings with the specified delimiter.",
                 "join(list:list<string>, delimiter:string) -> string"));
+
+        registry.register("startsWith", (args, vars) -> String.valueOf(args[0])
+                .startsWith(String.valueOf(args[1])),
+            new FunctionData("startsWith",
+                "Checks if the string starts with the specified prefix.",
+                "startsWith(string:string, prefix:string) -> boolean"));
 
         registry.register("concat", (args, vars) -> {
             StringBuilder sb = new StringBuilder();

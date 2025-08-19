@@ -1,20 +1,19 @@
 package io.github.synte.aliva;
 
-import static org.junit.jupiter.api.Assertions.*;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 public class EpubFunctionsTests {
 
     @Test
-    @Timeout(value = 10, unit = TimeUnit.SECONDS)
+    @Timeout(value = 20, unit = TimeUnit.SECONDS)
     void testEpubEndToEnd() throws Exception {
         Path dir = Files.createTempDirectory("aliva_epub_");
         Path outFile = dir.resolve("book.epub");

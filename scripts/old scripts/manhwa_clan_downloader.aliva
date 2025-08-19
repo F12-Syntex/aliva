@@ -1,0 +1,311 @@
+arguments(query)
+
+// ---------------------------
+// 1. Handle query argument and validate
+// ---------------------------
+query = ""
+if (length(arguments) >= 1) {
+    query = toString(get(arguments, 0))
+    println(concat("Starting manga download for query: ", query))
+} else {
+    println("ERROR: No search query provided!")
+    println("Usage: script.aliva \"manga name\"")
+    return
+}
+
+// Construct the search URL
+searchUrl = concat("https://manhwaclan.com/?s=", query, "&post_type=wp-manga")
+println(concat("DEBUG: Search URL: ", searchUrl))
+
+// ---------------------------
+// 2. Launch browser and search for manga
+// ---------------------------
+println("DEBUG: Launching browser...")
+b = browserLaunch(true)
+
+try {
+    println("DEBUG: Navigating to search page...")
+    browserGoto(b, searchUrl)
+    waitForHydration(b, "body", 30000)
+    sleep(2000)
+    doc = browserContent(b)
+    
+    // ---------------------------
+    // 3. Extract search results
+    // ---------------------------
+    println("DEBUG: Extracting search results...")
+    
+    // Try different selectors for search results
+    titles = selectAllText(doc, ".c-tabs-item__content .tab-summary .post-title h3 a")
+    links = selectAllAttr(doc, ".c-tabs-item__content .tab-summary .post-title h3 a", "href")
+    images = selectAllAttr(doc, ".c-tabs-item__content .tab-thumb img", "src")
+    
+    println(concat("DEBUG: Found ", toString(length(titles)), " titles"))
+    println(concat("DEBUG: Found ", toString(length(links)), " links"))
+    println(concat("DEBUG: Found ", toString(length(images)), " images"))
+    
+    // If no results, try alternative selectors
+    if (length(links) == 0) {
+        println("DEBUG: Trying alternative search result selectors...")
+        titles = selectAllText(doc, ".listupd .bs .bsx > a .bigor .tt")
+        links = selectAllAttr(doc, ".listupd .bs .bsx > a", "href")
+        images = selectAllAttr(doc, ".listupd .bs .bsx > a .limit img", "src")
+        
+        println(concat("DEBUG: Alternative search - Found ", toString(length(titles)), " titles"))
+        println(concat("DEBUG: Alternative search - Found ", toString(length(links)), " links"))
+    }
+    
+    // ---------------------------
+    // 4. Validate search results
+    // ---------------------------
+    if (length(links) == 0) {
+        println("ERROR: No manga found for the given query!")
+        println("Please check your search term and try again.")
+        browserClose(b)
+        return
+    }
+    
+    // Select the first result
+    mangaUrl = get(links, 0)
+    mangaTitle = if (length(titles) > 0) { get(titles, 0) } else { "Unknown Manga" }
+    mangaCoverUrl = if (length(images) > 0) { get(images, 0) } else { "" }
+    
+    println("DEBUG: Selected manga:")
+    println(concat("  Title: ", mangaTitle))
+    println(concat("  URL: ", mangaUrl))
+    println(concat("  Cover: ", mangaCoverUrl))
+    
+    // ---------------------------
+    // 5. Navigate to manga details page
+    // ---------------------------
+    println("DEBUG: Loading manga details page...")
+    browserGoto(b, mangaUrl)
+    waitForHydration(b, "body", 30000)
+    sleep(2000)
+    detailDoc = browserContent(b)
+    
+    // Extract additional manga info
+    mangaDescription = selectText(detailDoc, ".description-summary .summary__content")
+    if (length(mangaDescription) == 0) {
+        mangaDescription = selectText(detailDoc, ".summary__content")
+    }
+    if (length(mangaDescription) == 0) {
+        mangaDescription = "No description available."
+    }
+    
+    // Clean up title for filename
+    safeMangaTitle = sanitizeFilename(mangaTitle)
+    println(concat("DEBUG: Safe filename: ", safeMangaTitle))
+    
+    // ---------------------------
+    // 6. Extract chapter list
+    // ---------------------------
+    println("DEBUG: Extracting chapter list...")
+    
+    // Try different chapter list selectors
+    chapterLinks = selectAllAttr(detailDoc, ".listing-chapters_wrap .version-chap li a", "href")
+    chapterTitles = selectAllText(detailDoc, ".listing-chapters_wrap .version-chap li a")
+    
+    if (length(chapterLinks) == 0) {
+        println("DEBUG: Trying alternative chapter selectors...")
+        chapterLinks = selectAllAttr(detailDoc, "ul.main li.wp-manga-chapter a", "href")
+        chapterTitles = selectAllText(detailDoc, "ul.main li.wp-manga-chapter a")
+    }
+    
+    if (length(chapterLinks) == 0) {
+        println("DEBUG: Trying more chapter selectors...")
+        chapterLinks = selectAllAttr(detailDoc, ".wp-manga-chapter a", "href")
+        chapterTitles = selectAllText(detailDoc, ".wp-manga-chapter a")
+    }
+    
+    println(concat("DEBUG: Found ", toString(length(chapterLinks)), " chapters"))
+    
+    if (length(chapterLinks) == 0) {
+        println("ERROR: No chapters found for this manga!")
+        browserClose(b)
+        return
+    }
+    
+    // Reverse the lists to start from chapter 1 (they're usually in reverse order)
+    chapterLinks = reverse(chapterLinks)
+    chapterTitles = reverse(chapterTitles)
+    
+    // ---------------------------
+    // 7. Setup output directories and EPUB
+    // ---------------------------
+    println("DEBUG: Setting up output directories...")
+    outputDir = concat("output/", safeMangaTitle)
+    assetsDir = concat(outputDir, "/assets")
+    mkdirs(outputDir)
+    mkdirs(assetsDir)
+    
+    // Create EPUB
+    println("DEBUG: Creating EPUB...")
+    book = epubCreate("manga")
+    epubMetadata(book, mangaTitle, "Scraped from ManhwaClan", "en")
+    
+    // ---------------------------
+    // 8. Download and add cover image
+    // ---------------------------
+    embeddedCoverRes = ""
+    if (length(mangaCoverUrl) > 0) {
+        println("DEBUG: Downloading cover image...")
+        try {
+            coverBytes = downloadBytes(mangaCoverUrl)
+            if (length(coverBytes) > 0) {
+                coverSlug = urlSlug(mangaCoverUrl)
+                if (length(coverSlug) == 0) { coverSlug = "cover.jpg" }
+                
+                coverPath = concat(assetsDir, "/", coverSlug)
+                writeBytes(coverPath, coverBytes)
+                println(concat("DEBUG: Cover saved to: ", coverPath))
+                
+                epubSetCover(book, coverBytes, coverSlug)
+                embeddedCoverRes = epubAddImage(book, coverSlug, coverBytes)
+            }
+        } catch {
+            println("WARNING: Failed to download cover image")
+        }
+    }
+    
+    // ---------------------------
+    // 9. Create cover page
+    // ---------------------------
+    println("DEBUG: Creating cover page...")
+    headTemplate = "<html><head><meta charset='utf-8'><style>body{margin:0;padding:20px;background:#f5f5f5;font-family:Arial,sans-serif}.cover{text-align:center;max-width:800px;margin:0 auto}.cover img{max-width:100%;height:auto;margin-bottom:20px}.title{font-size:2em;font-weight:bold;margin-bottom:10px}.description{text-align:left;margin-top:20px;line-height:1.6}</style></head><body>"
+    tailTemplate = "</body></html>"
+    
+    coverImgTag = if (length(embeddedCoverRes) > 0) {
+        concat("<img src='", embeddedCoverRes, "' alt='Cover'/>")
+    } else {
+        ""
+    }
+    
+    coverHtml = join([
+        headTemplate,
+        "<div class='cover'>",
+        coverImgTag,
+        "<h1 class='title'>", mangaTitle, "</h1>",
+        "<div class='description'>", mangaDescription, "</div>",
+        "</div>",
+        tailTemplate
+    ], "")
+    
+    epubAddChapter(book, concat(mangaTitle, " - Cover"), coverHtml, "000-cover.html")
+    
+    // ---------------------------
+    // 10. Download each chapter
+    // ---------------------------
+    println(concat("DEBUG: Starting download of ", toString(length(chapterLinks)), " chapters..."))
+    
+    chapterNum = 1
+    while (chapterNum <= length(chapterLinks)) {
+        chapterIndex = chapterNum - 1
+        chapterUrl = get(chapterLinks, chapterIndex)
+        chapterTitle = if (chapterIndex < length(chapterTitles)) {
+            get(chapterTitles, chapterIndex)
+        } else {
+            concat("Chapter ", toString(chapterNum))
+        }
+        
+        println(concat("DEBUG: Processing chapter ", toString(chapterNum), "/", toString(length(chapterLinks)), ": ", chapterTitle))
+        println(concat("DEBUG: Chapter URL: ", chapterUrl))
+        
+        try {
+            // Navigate to chapter
+            browserGoto(b, chapterUrl)
+            waitForHydration(b, "body", 30000)
+            sleep(2000)
+            chapterDoc = browserContent(b)
+            
+            // Extract chapter images
+            pageUrls = selectAllAttr(chapterDoc, ".reading-content img", "src")
+            if (length(pageUrls) == 0) {
+                pageUrls = selectAllAttr(chapterDoc, "#readerarea img", "src")
+            }
+            if (length(pageUrls) == 0) {
+                pageUrls = selectAllAttr(chapterDoc, ".wp-manga-chapter-img", "src")
+            }
+            
+            println(concat("DEBUG: Found ", toString(pageUrls), " pages in chapter"))
+            
+            if (length(pageUrls) == 0) {
+                println(concat("WARNING: No images found in chapter ", toString(chapterNum)))
+                chapterNum = chapterNum + 1
+                continue
+            }
+            
+            // Create chapter HTML with all pages
+            chapterHtml = join([
+                headTemplate,
+                "<div style='text-align:center'>",
+                "<h1>", chapterTitle, "</h1>"
+            ], "")
+            
+            // Download and add each page
+            pageIndex = 0
+            while (pageIndex < length(pageUrls)) {
+                pageUrl = get(pageUrls, pageIndex)
+                pageNum = pageIndex + 1
+                
+                println(concat("DEBUG: Downloading page ", toString(pageNum), "/", toString(length(pageUrls))))
+                
+                try {
+                    pageBytes = downloadBytes(pageUrl)
+                    if (length(pageBytes) > 0) {
+                        pageSlug = concat("ch", formatNumber(chapterNum, "000"), "_page", formatNumber(pageNum, "000"), ".jpg")
+                        pagePath = concat(assetsDir, "/", pageSlug)
+                        writeBytes(pagePath, pageBytes)
+                        
+                        pageRes = epubAddImage(book, pageSlug, pageBytes)
+                        chapterHtml = concat(chapterHtml, "<img src='", pageRes, "' style='max-width:100%;margin:10px 0;' alt='Page ", toString(pageNum), "'/>")
+                    } else {
+                        println(concat("WARNING: Failed to download page ", toString(pageNum)))
+                    }
+                } catch {
+                    println(concat("ERROR: Exception downloading page ", toString(pageNum)))
+                }
+                
+                pageIndex = pageIndex + 1
+            }
+            
+            chapterHtml = concat(chapterHtml, "</div>", tailTemplate)
+            
+            // Add chapter to EPUB
+            chapterFileName = concat(formatNumber(chapterNum, "000"), "-chapter.html")
+            epubAddChapter(book, chapterTitle, chapterHtml, chapterFileName)
+            
+            println(concat("DEBUG: Chapter ", toString(chapterNum), " completed"))
+            
+        } catch {
+            println(concat("ERROR: Failed to process chapter ", toString(chapterNum)))
+        }
+        
+        chapterNum = chapterNum + 1
+        
+        // Small delay between chapters to be respectful
+        sleep(1000)
+    }
+    
+    // ---------------------------
+    // 11. Save final EPUB
+    // ---------------------------
+    println("DEBUG: Saving EPUB file...")
+    epubPath = concat(outputDir, "/", safeMangaTitle, ".epub")
+    epubSave(book, epubPath)
+    
+    println("=====================================")
+    println("DOWNLOAD COMPLETED SUCCESSFULLY!")
+    println("=====================================")
+    println(concat("Manga: ", mangaTitle))
+    println(concat("Chapters downloaded: ", toString(length(chapterLinks))))
+    println(concat("EPUB saved to: ", epubPath))
+    println(concat("Assets saved to: ", assetsDir))
+    println("=====================================")
+    
+} catch {
+    println("FATAL ERROR: An unexpected error occurred during download")
+} finally {
+    // Always close the browser
+    browserClose(b)
+}

@@ -1,6 +1,6 @@
 # Aliva Language Reference
 
-_Generated Tue, 19 Aug 2025 10:21:37 +0100_
+_Generated Tue, 19 Aug 2025 12:50:48 +0100_
 
 ## Language Specification
 
@@ -155,6 +155,7 @@ COMMENT : '//' ~[\r\n]* -> skip;
 
 - `append(list, value:any)` : Appends a value to a list. List must be mutable.
 - `appendFile(path:string, content:string)` : Appends text content (UTF-8) to a file, creating it if needed.
+- `base64Decode(encoded:string) -> string` : Decodes a Base64 encoded string.
 - `browserClick(browser:BrowserEngine, selector:string)` : Clicks an element matching the selector.
 - `browserClose(browser:BrowserEngine)` : Closes the browser and releases resources.
 - `browserContent(browser:BrowserEngine) -> Document` : Returns the current page content parsed as HTML Document.
@@ -167,14 +168,15 @@ COMMENT : '//' ~[\r\n]* -> skip;
 - `classOf(value:any) -> string` : Returns the runtime class name of a value.
 - `concat(...strings) -> string` : Concatenates multiple strings into one.
 - `contains(string:string, sequence:string) -> boolean` : Checks if the string contains the specified sequence of char values.
+- `downloadBytes(url:string) -> byte[]` : Downloads the resource at a URL and returns its bytes.
 - `dump(value:any)` : Pretty-prints nested lists and maps to stdout.
-- `epubAddChapter(book:Book, title:string, htmlContent:string, [fileName:string])` : Adds an HTML chapter to the EPUB.
-- `epubAddImage(book:Book, imageName:string, imageBytes:byte[]) -> string` : Adds an image resource to the EPUB and returns the resource name.
-- `epubAddTextChapter(book:Book, title:string, text:string, [fileName:string])` : Wraps plain text into minimal HTML and adds it as a chapter.
-- `epubCreate(varName:string) -> Book` : Creates a new EPUB Book and stores it into variables by a given name.
-- `epubMetadata(book:Book, title:string, author:string, language:string)` : Sets title, author and language metadata on the EPUB.
-- `epubSave(book:Book, filePath:string)` : Saves the EPUB to a file path.
-- `epubSetCover(book:Book, imageBytes:byte[], [imageName:string])` : Sets the cover image for the EPUB.
+- `epubAddChapter(book,title,html)` : Add chapter
+- `epubAddImage(book,name,bytes)` : Add image
+- `epubAddTextChapter(book,title,text)` : Add text chapter
+- `epubCreate(name)` : Create book
+- `epubMetadata(book,title,author,lang)` : Set metadata
+- `epubSave(book,path)` : Save epub
+- `epubSetCover(book,bytes,name)` : Set cover
 - `fileExists(path:string) -> boolean` : Checks whether a file exists.
 - `flatten(list<list|any>) -> list` : Flattens a one-level nested list.
 - `formatNumber(number:number, pattern:string) -> string` : Formats a number using a DecimalFormat pattern.
@@ -195,8 +197,9 @@ COMMENT : '//' ~[\r\n]* -> skip;
 - `println(...values) -> string` : Prints arguments followed by a newline. Also returns the printed string.
 - `random() -> number` : Returns a random number in [0, 1).
 - `range(start:number, end:number, [step:number]) -> list<number>` : Creates a list of numbers from start to end inclusive, with optional step.
-- `readBytes(path:string) -> byte[]` : Reads a file as binary data, or empty byte[] if it does not exist.
+- `readBytes(path:string) -> byte[]` : Reads a file fully into a byte[]
 - `readFile(path:string) -> string` : Reads a text file (UTF-8) and returns its contents, or empty string if it does not exist.
+- `readText(path:string) -> string` : Reads a file into a UTF-8 string
 - `repeat(value:any, times:number) -> list` : Creates a list by repeating a value N times.
 - `replace(original:string, target:string, replacement:string) -> string` : Replaces occurrences of a substring within a string with another string.
 - `replaceAll(string:string, regex:string, replacement:string) -> string` : Replaces each substring of this string that matches the given regex with the replacement.
@@ -213,6 +216,7 @@ COMMENT : '//' ~[\r\n]* -> skip;
 - `slice(list, start:number, end:number) -> list` : Returns a sublist from start index (inclusive) to end index (exclusive, clamped).
 - `sortBy(listOfMaps:list<map>, key:string) -> list<map>` : Returns a new list of maps sorted ascending by the specified key.
 - `split(string:string, regex:string) -> list<string>` : Splits the string around matches of the given regex.
+- `startsWith(string:string, prefix:string) -> boolean` : Checks if the string starts with the specified prefix.
 - `toJson(value:any) -> string` : Serializes a value to a compact JSON string.
 - `toNumber(value:any) -> number` : Converts a value to a number or throws if it cannot be parsed.
 - `toString(value:any) -> string` : Converts a value to a string, null becomes empty string.

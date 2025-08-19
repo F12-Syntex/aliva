@@ -1,0 +1,269 @@
+// ---------------------------
+// 1. Handle query argument
+// ---------------------------
+query = ""
+if (length(arguments) >= 1) {
+    // If the script is called with an argument, use it as the search query
+    query = toString(get(arguments, 0))
+}
+
+// Construct the search URL with the query
+searchUrl = concat("https://kingofshojo.com/?s=", query)
+println(concat("Launching browser for search: ", searchUrl))
+
+// ---------------------------
+// 2. Launch browser and load search results
+// ---------------------------
+// Launch a detached Playwright browser instance (true = headless mode disabled)
+b = browserLaunch("playwright", true)
+
+browserGoto(b, searchUrl)                     // Navigate to search page
+waitForHydration(b, "body", 30000)            // Wait until body is fully hydrated (reactive websites)
+sleep(1200)                                   // Extra delay to ensure rendering
+doc = browserContent(b)                       // Get page HTML
+
+// ---------------------------
+// 3. Extract search results
+// ---------------------------
+// Scrape titles, links, and images from the search result cards
+titles = selectAllText(doc, ".listupd .bs .bsx > a .bigor .tt")
+links  = selectAllAttr(doc, ".listupd .bs .bsx > a", "href")
+images = selectAllAttr(doc, ".listupd .bs .bsx > a .limit img", "src")
+alts   = selectAllAttr(doc, ".listupd .bs .bsx > a .limit img", "alt")
+
+// If no results were found, try the "next page"
+if (length(links) == 0) {
+    nextHrefTry = selectAttr(doc, ".pagination a.next", "href")
+    if (length(nextHrefTry) > 0) {
+        browserGoto(b, nextHrefTry)
+        waitForHydration(b, "body", 20000)
+        sleep(800)
+        doc = browserContent(b)
+        titles = selectAllText(doc, ".listupd .bs .bsx > a .bigor .tt")
+        links  = selectAllAttr(doc, ".listupd .bs .bsx > a", "href")
+        images = selectAllAttr(doc, ".listupd .bs .bsx > a .limit img", "src")
+        alts   = selectAllAttr(doc, ".listupd .bs .bsx > a .limit img", "alt")
+    }
+}
+
+// ---------------------------
+// 4. Handle no results or select the first
+// ---------------------------
+if (length(links) == 0) {
+    println(concat("No results found for query: ", query))
+} else {
+    // Pick the first search result
+    seriesUrl = get(links, 0)
+    seriesCoverUrl = ""
+    if (length(images) > 0) {
+        seriesCoverUrl = get(images, 0)
+    }
+
+    // Extract series title (fallback to <img alt> if missing)
+    seriesTitle = ""
+    if (length(titles) > 0) { seriesTitle = get(titles, 0) }
+    if (length(seriesTitle) == 0 && length(alts) > 0) { seriesTitle = get(alts, 0) }
+
+    println("First result:")
+    println(concat("  Title : ", seriesTitle))
+    println(concat("  URL   : ", seriesUrl))
+    println(concat("  Cover : ", seriesCoverUrl))
+
+    // ---------------------------
+    // 5. Open series page and get all chapters
+    // ---------------------------
+    browserGoto(b, seriesUrl)
+    waitForHydration(b, "body", 30000)
+    sleep(1000)
+    mdoc = browserContent(b)
+
+    // Get ALL chapter links (not just the first one)
+    allChapterLinks = selectAllAttr(mdoc, "#chapterlist.eplister ul.clstyle li .eph-num > a", "href")
+    allChapterTitles = selectAllText(mdoc, "#chapterlist.eplister ul.clstyle li .eph-num > a")
+
+    if (length(allChapterLinks) == 0) {
+        println("Could not find any chapter links.")
+    } else {
+        println(concat("Found ", toString(length(allChapterLinks)), " chapters to download"))
+
+        // ---------------------------
+        // 6. Prepare EPUB build directories
+        // ---------------------------
+        safeSeries = sanitizeFilename(seriesTitle)
+        outDir = concat("output/", safeSeries)
+        assetsDir = concat(outDir, "/assets")
+        mkdirs(outDir)
+        mkdirs(assetsDir)
+
+        // Create EPUB object for the entire series
+        book = epubCreate("book")
+        bookTitle = concat(seriesTitle, " - Complete Series")
+        epubMetadata(book, bookTitle, "Scraped from Kingofshojo", "en")
+
+        // ---------------------------
+        // 7. Handle cover image
+        // ---------------------------
+        embeddedCoverRes = ""
+        if (length(seriesCoverUrl) > 0 && startsWith(seriesCoverUrl, "http")) {
+            coverBytes = downloadBytes(seriesCoverUrl)
+            if (length(coverBytes) > 0) {
+                coverSlug = urlSlug(seriesCoverUrl)
+                if (length(coverSlug) == 0) { coverSlug = "cover.jpg" }
+
+                // Save cover to disk for verification
+                coverDiskPath = concat(assetsDir, "/", coverSlug)
+                writeBytes(coverDiskPath, coverBytes)
+                println(concat("Cover downloaded to: ", coverDiskPath))
+
+                // Assign cover to EPUB
+                epubSetCover(book, coverBytes, coverSlug)
+
+                // Also add cover as a normal image resource
+                embeddedCoverRes = epubAddImage(book, coverSlug, coverBytes)
+            } else {
+                println("Warning: Cover download returned 0 bytes; skipping epubSetCover.")
+            }
+        } else {
+            println("Warning: No valid cover URL found on search card.")
+        }
+
+        // ---------------------------
+        // 8. Common HTML template parts
+        // ---------------------------
+        headA = "<html><head><meta charset='utf-8'><style>body{margin:0;background:#111}figure{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center}img{max-width:100%;max-height:100vh;height:auto}</style><title>"
+        headB = "</title></head><body>"
+        tail  = "</body></html>"
+
+        // ---------------------------
+        // 9. Add cover page to EPUB
+        // ---------------------------
+        coverPageTitle = concat(seriesTitle, " — Cover")
+        coverImgSrc = ""
+        if (length(embeddedCoverRes) > 0) {
+            coverImgSrc = embeddedCoverRes
+        } else {
+            coverImgSrc = seriesCoverUrl
+        }
+
+        coverHtml = join([
+            headA, coverPageTitle, headB,
+            "<figure><img alt='Cover' src='", coverImgSrc, "'/></figure>",
+            tail
+        ], "")
+        epubAddChapter(book, coverPageTitle, coverHtml, "000-cover.html")
+
+        // ---------------------------
+        // 10. Process all chapters (reverse order for chronological reading)
+        // ---------------------------
+        chapterIndex = length(allChapterLinks) - 1
+        chapterNum = 1
+        
+        while (chapterIndex >= 0) {
+            chapterUrl = get(allChapterLinks, chapterIndex)
+            chapterTitle = ""
+            if (length(allChapterTitles) > chapterIndex) {
+                chapterTitle = get(allChapterTitles, chapterIndex)
+            } else {
+                chapterTitle = concat("Chapter ", toString(chapterNum))
+            }
+
+            println("")
+            println(concat("=== Processing Chapter ", toString(chapterNum), " ==="))
+            println(concat("Title: ", chapterTitle))
+            println(concat("URL: ", chapterUrl))
+
+            // Navigate to chapter page
+            browserGoto(b, chapterUrl)
+            waitForHydration(b, "body", 30000)
+            sleep(800)
+            cdoc = browserContent(b)
+
+            // Extract all page image URLs for the chapter
+            pageUrls = selectAllAttr(cdoc, "#readerarea img", "src")
+            if (length(pageUrls) == 0) {
+                pageUrls = selectAllAttr(cdoc, "div#readerarea.rdminimal img", "src")
+            }
+
+            println(concat("Found ", toString(length(pageUrls)), " pages in this chapter"))
+
+            // ---------------------------
+            // 11. Add chapter pages (one image per page)
+            // ---------------------------
+            pageIndex = 0
+            while (pageIndex < length(pageUrls)) {
+                pageNum = pageIndex + 1
+                srcUrl = get(pageUrls, pageIndex)
+
+                println(concat("Downloading page ", toString(pageNum), " of ", toString(length(pageUrls))))
+
+                resName = ""
+                if (startsWith(srcUrl, "http")) {
+                    pbytes = downloadBytes(srcUrl)
+                    if (length(pbytes) > 0) {
+                        slug = urlSlug(srcUrl)
+                        if (length(slug) == 0) {
+                            slug = concat("ch", toString(chapterNum), "-page-", toString(pageNum), ".jpg")
+                        } else {
+                            // Prefix with chapter number to avoid conflicts
+                            slug = concat("ch", toString(chapterNum), "-", slug)
+                        }
+                        
+                        // Save downloaded page to disk
+                        pageDiskPath = concat(assetsDir, "/", slug)
+                        writeBytes(pageDiskPath, pbytes)
+
+                        // Add page image to EPUB
+                        resName = epubAddImage(book, slug, pbytes)
+                    } else {
+                        println(concat("Warning: Failed to download page ", toString(pageNum), " - 0 bytes returned"))
+                    }
+                } else {
+                    println(concat("Warning: Invalid URL for page ", toString(pageNum), ": ", srcUrl))
+                }
+
+                // Use embedded resource if available, else fallback to remote URL
+                imgSrc = ""
+                if (length(resName) > 0) {
+                    imgSrc = resName
+                } else {
+                    imgSrc = srcUrl
+                }
+
+                // Build HTML page containing the image
+                pageTitle = concat(seriesTitle, " — ", chapterTitle, " — Page ", toString(pageNum))
+                pageHtml = join([
+                    headA, pageTitle, headB,
+                    "<figure><img alt='", chapterTitle, " Page ", toString(pageNum), "' src='", imgSrc, "'/></figure>",
+                    tail
+                ], "")
+
+                // Add chapter page to EPUB with chapter and page numbering
+                fileName = concat(formatNumber(chapterNum, "000"), "-", formatNumber(pageNum, "000"), "-page.html")
+                epubAddChapter(book, pageTitle, pageHtml, fileName)
+
+                pageIndex = pageIndex + 1
+            }
+
+            println(concat("Completed Chapter ", toString(chapterNum), " (", toString(length(pageUrls)), " pages)"))
+            
+            chapterIndex = chapterIndex - 1
+            chapterNum = chapterNum + 1
+        }
+
+        // ---------------------------
+        // 12. Save EPUB to disk
+        // ---------------------------
+        outPath = concat(outDir, "/", safeSeries, " - Complete Series.epub")
+        epubSave(book, outPath)
+        println("")
+        println(concat("=== DOWNLOAD COMPLETE ==="))
+        println(concat("EPUB saved to: ", outPath))
+        println(concat("Total chapters downloaded: ", toString(chapterNum - 1)))
+        println("Note: If your reader doesn't show the cover thumbnail, check:")
+        println("  - The 'Cover downloaded to:' path above for the file presence")
+        println("  - That the EPUB's first page (000-cover.html) displays the image")
+    }
+}
+
+// Detached: leave browser open for debugging
+// browserClose(b)

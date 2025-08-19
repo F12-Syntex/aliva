@@ -6,6 +6,13 @@
   "configurations": [
     {
       "type": "java",
+      "name": "HtmlSimplifier",
+      "request": "launch",
+      "mainClass": "io.github.synte.aliva.HtmlSimplifier",
+      "projectName": "aliva"
+    },
+    {
+      "type": "java",
       "name": "DocumentationGeneratorMain",
       "request": "launch",
       "mainClass": "io.github.synte.aliva.docgen.DocumentationGeneratorMain",
