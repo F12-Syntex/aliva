@@ -89,7 +89,7 @@ public class DocumentationGeneratorMain {
                 md.append("\n");
             });
 
-        Path out = Path.of("docs", "LANGUAGE_REFERENCE.md");
+        Path out = Path.of("LANGUAGE_REFERENCE.md");
         Files.createDirectories(out.getParent());
         try (FileWriter writer = new FileWriter(out.toFile(), StandardCharsets.UTF_8)) {
             writer.write(md.toString());
