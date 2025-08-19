@@ -31,13 +31,14 @@ import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
+import com.microsoft.playwright.Route;
+import com.microsoft.playwright.options.LoadState;
 import com.microsoft.playwright.options.WaitUntilState;
 
 public class HtmlSimplifier {
 
     // Rendered line record used for grouping/compression
     private static class Rendered {
-
         String fullPath;          // full CSS-like path
         List<String> segments;    // split path segments
         String payload;           // text/attrs like ": Title" or "[src=...]"
@@ -45,11 +46,10 @@ public class HtmlSimplifier {
     }
 
     public static class Options {
-
         public boolean headless = true;
         public String waitForSelector = "body";
-        public int waitTimeoutMs = 30000;
-        public int settleDelayMs = 1000;
+        public int waitTimeoutMs = 60000;     // increased to 60s
+        public int settleDelayMs = 1200;
 
         // Cleaning options
         public boolean removeScriptsStyles = true;
@@ -75,21 +75,29 @@ public class HtmlSimplifier {
         public int minPrefixSegmentsForContext = 8;
 
         // Parent header grouping
-        // If multiple consecutive lines share the same immediate parent path,
-        // emit one PARENT: <path> and list only child tails.
         public boolean enableParentGrouping = true;
         public int minChildrenForParentGroup = 2; // group only if at least this many children
+
+        // Navigation retries
+        public int maxNavRetries = 3;
+        public int retryBaseDelayMs = 800;
+
+        // Optional per-URL selector overrides
+        public Map<String, String> urlWaitSelectorOverrides = new LinkedHashMap<>();
     }
 
     public static void main(String[] args) throws IOException {
-        // Example usage: simplify a list of URLs.
+        // Example usage: simplify pornwha pages (homepage, search, series, and a chapter).
         String[] urls = new String[]{
-            "https://manhwaclan.com/",
-            "https://manhwaclan.com/?s=hello&post_type=wp-manga",
-            "https://manhwaclan.com/manga/hello-im-the-gardener/",
-            "https://manhwaclan.com/manga/hello-im-the-gardener/chapter-90/"
+            "https://www.pornhwaz.com/",
+            "https://www.pornhwaz.com/?s=her&post_type=wp-manga",
+            "https://www.pornhwaz.com/webtoon/benefactors-daughters/",
+            "https://www.pornhwaz.com/webtoon/benefactors-daughters/chapter-76/"
         };
+
         Options opts = new Options();
+        // If you want to watch it live for debugging:
+        // opts.headless = false;
         simplifyAndSaveAll(urls, opts);
     }
 
@@ -97,22 +105,30 @@ public class HtmlSimplifier {
         try (Playwright playwright = Playwright.create()) {
             BrowserType.LaunchOptions launch = new BrowserType.LaunchOptions().setHeadless(opts.headless);
             Browser browser = playwright.chromium().launch(launch);
+
             Browser.NewContextOptions ctxOpts = new Browser.NewContextOptions()
                     .setBypassCSP(true)
-                    .setIgnoreHTTPSErrors(true);
+                    .setIgnoreHTTPSErrors(true)
+                    .setUserAgent(realisticUserAgent())
+                    .setViewportSize(1280, 900)
+                    .setLocale("en-US");
             BrowserContext context = browser.newContext(ctxOpts);
 
-            for (String url : urls) {
+            // Block common ads/trackers to reduce long-running requests
+            context.route("**/*", HtmlSimplifier::adBlockRoute);
+
+            for (int i = 0; i < urls.length; i++) {
                 try {
-                    String hydratedHtml = fetchHydratedHtml(context, url, opts);
-                    String simplified = simplifyHtml(hydratedHtml, url, opts);
-                    Path outPath = outputPathFor(url, opts.outputRoot);
+                    String referer = (i > 0) ? urls[i - 1] : null;
+                    String hydratedHtml = fetchHydratedHtml(context, urls[i], referer, opts);
+                    String simplified = simplifyHtml(hydratedHtml, urls[i], opts);
+                    Path outPath = outputPathFor(urls[i], opts.outputRoot);
                     Files.createDirectories(outPath.getParent());
                     Files.writeString(outPath, simplified, StandardCharsets.UTF_8,
                             StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
                     System.out.println("Saved: " + outPath.toAbsolutePath());
                 } catch (Exception e) {
-                    System.err.println("Failed to process URL: " + url);
+                    System.err.println("Failed to process URL: " + urls[i]);
                     e.printStackTrace();
                 }
             }
@@ -122,20 +138,21 @@ public class HtmlSimplifier {
         }
     }
 
-    public static String simplifyFromUrl(String url) {
-        return simplifyFromUrl(url, new Options());
-    }
-
-    public static String simplifyFromUrl(String url, Options opts) {
+    public static String simplifyFromUrl(String url, String referer, Options opts) {
         try (Playwright playwright = Playwright.create()) {
             BrowserType.LaunchOptions launch = new BrowserType.LaunchOptions().setHeadless(opts.headless);
             Browser browser = playwright.chromium().launch(launch);
+
             Browser.NewContextOptions ctxOpts = new Browser.NewContextOptions()
                     .setBypassCSP(true)
-                    .setIgnoreHTTPSErrors(true);
+                    .setIgnoreHTTPSErrors(true)
+                    .setUserAgent(realisticUserAgent())
+                    .setViewportSize(1280, 900)
+                    .setLocale("en-US");
             BrowserContext context = browser.newContext(ctxOpts);
+            context.route("**/*", HtmlSimplifier::adBlockRoute);
 
-            String hydratedHtml = fetchHydratedHtml(context, url, opts);
+            String hydratedHtml = fetchHydratedHtml(context, url, referer, opts);
             String simplified = simplifyHtml(hydratedHtml, url, opts);
 
             context.close();
@@ -144,17 +161,131 @@ public class HtmlSimplifier {
         }
     }
 
-    private static String fetchHydratedHtml(BrowserContext context, String url, Options opts) {
+    public static String simplifyFromUrl(String url, Options opts) {
+        return simplifyFromUrl(url, null, opts);
+    }
+
+    public static String simplifyFromUrl(String url) {
+        return simplifyFromUrl(url, null, new Options());
+    }
+
+    private static String fetchHydratedHtml(BrowserContext context, String url, String referer, Options opts) {
         Page page = context.newPage();
-        page.navigate(url, new Page.NavigateOptions().setWaitUntil(WaitUntilState.NETWORKIDLE));
-        page.waitForSelector(opts.waitForSelector, new Page.WaitForSelectorOptions()
-                .setTimeout((double) opts.waitTimeoutMs));
+
+        Page.NavigateOptions navOpts = new Page.NavigateOptions()
+                .setWaitUntil(WaitUntilState.DOMCONTENTLOADED)
+                .setTimeout((double) opts.waitTimeoutMs);
+        if (referer != null && !referer.isEmpty()) {
+            navOpts.setReferer(referer);
+        }
+
+        String waitSelector = opts.waitForSelector != null ? opts.waitForSelector : "body";
+        // Override selector for specific URLs if provided
+        for (Map.Entry<String, String> e : opts.urlWaitSelectorOverrides.entrySet()) {
+            if (url.equalsIgnoreCase(e.getKey())) {
+                waitSelector = e.getValue();
+                break;
+            }
+        }
+
+        navigateWithRetries(page, url, navOpts, opts);
+
+        // Additional wait for LOAD (not networkidle)
+        waitForLoadStateSafe(page, LoadState.LOAD, opts.waitTimeoutMs);
+
+        // Try to wait for the selector (text or css). If it fails, continue anyway.
+        waitForSelectorSafe(page, waitSelector, opts.waitTimeoutMs);
+
         if (opts.settleDelayMs > 0) {
             page.waitForTimeout(opts.settleDelayMs);
         }
         String content = page.content();
         page.close();
         return content;
+    }
+
+    private static void navigateWithRetries(Page page, String url, Page.NavigateOptions navOpts, Options opts) {
+        int attempts = 0;
+        Throwable last = null;
+        while (attempts < opts.maxNavRetries) {
+            try {
+                page.navigate(url, navOpts);
+                return;
+            } catch (Throwable t) {
+                last = t;
+                attempts++;
+                int backoff = opts.retryBaseDelayMs * (int) Math.pow(2, attempts - 1);
+                System.err.println("[navigate retry " + attempts + "/" + opts.maxNavRetries + "] " + t.getMessage());
+                page.waitForTimeout(backoff);
+            }
+        }
+        if (last instanceof RuntimeException) {
+            throw (RuntimeException) last;
+        }
+        throw new RuntimeException(last);
+    }
+
+    private static void waitForLoadStateSafe(Page page, LoadState state, int timeoutMs) {
+        try {
+            page.waitForLoadState(state, new Page.WaitForLoadStateOptions().setTimeout((double) timeoutMs));
+        } catch (Throwable ignore) {
+        }
+    }
+
+    private static void waitForSelectorSafe(Page page, String selector, int timeoutMs) {
+        if (selector == null || selector.isEmpty()) return;
+        try {
+            page.waitForSelector(selector, new Page.WaitForSelectorOptions().setTimeout((double) timeoutMs));
+        } catch (Throwable t) {
+            // Fallback: try 'body' to ensure at least something
+            try {
+                page.waitForSelector("body", new Page.WaitForSelectorOptions().setTimeout((double) Math.min(3000, timeoutMs)));
+            } catch (Throwable ignore) {
+            }
+        }
+    }
+
+    private static void adBlockRoute(Route route) {
+        String url = route.request().url();
+        String lc = url.toLowerCase();
+
+        // Very lightweight filter to avoid common ad/tracker/long-poll domains
+        if (lc.contains("doubleclick.net") ||
+            lc.contains("googletagmanager.com") ||
+            lc.contains("googlesyndication.com") ||
+            lc.contains("adservice") ||
+            lc.contains("adsystem") ||
+            lc.contains("taboola") ||
+            lc.contains("outbrain") ||
+            lc.contains("hotjar") ||
+            lc.contains("scorecardresearch.com") ||
+            lc.contains("connect.facebook.net") ||
+            lc.contains("analytics") && !lc.contains("pornhwa.pro") ||
+            lc.contains("/prebid/") ||
+            lc.contains("adzerk") ||
+            lc.contains("moatads") ||
+            lc.contains("pubmatic") ||
+            lc.contains("cloudfront.net/ads") ||
+            lc.contains("pixel.") ||
+            lc.contains("/tracking") ||
+            lc.contains("/track/")) {
+            try {
+                route.abort();
+                return;
+            } catch (Throwable ignore) {
+            }
+        }
+
+        try {
+            route.resume();
+        } catch (Throwable ignore) {
+        }
+    }
+
+    private static String realisticUserAgent() {
+        // A modern Chrome-like UA to avoid headless detection heuristics
+        return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+             + "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
     }
 
     public static String simplifyHtml(String rawHtml, String baseUrl, Options opts) {
@@ -635,7 +766,7 @@ public class HtmlSimplifier {
             s.append("[value=").append(cleanText(value)).append("]");
         }
         if (!text.isEmpty()) {
-            s.append(": ").append(text);
+            s.append(": ").append(cleanText(text));
         }
         return s.toString();
     }
@@ -717,7 +848,6 @@ public class HtmlSimplifier {
                 for (Rendered r : pb.children) {
                     String tail = lastSegment(r);
                     if (tail == null) {
-                        // Fallback to full path if something odd
                         tail = r.fullPath;
                     }
                     out.append(" • ").append(tail).append(r.payload);
@@ -742,7 +872,6 @@ public class HtmlSimplifier {
     }
 
     private static class ParentBlock {
-
         String parentPath;
         List<Rendered> children;
 
@@ -929,11 +1058,9 @@ public class HtmlSimplifier {
 
     // Minimal adapter for Jsoup NodeVisitor
     private static abstract class NodeVisitorAdapter implements org.jsoup.select.NodeVisitor {
-
         @Override
         public void head(Node node, int depth) {
         }
-
         @Override
         public void tail(Node node, int depth) {
         }
